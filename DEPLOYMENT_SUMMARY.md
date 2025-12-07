@@ -4,18 +4,24 @@
 
 ### 1️⃣ Настройка продакшн-сервера (один раз)
 
+**Все команды выполняются на локальной машине:**
+
 ```
 1. Настройка сервера (Docker, пользователь deploy)
-   → scripts/setup_server.sh
+   → ./scripts/setup_server.sh
+   (скрипт сам подключается к серверу через SSH)
 
-2. Настройка SSH ключей
-   → ssh-copy-id deploy@45.135.234.22
+2. Настройка SSH ключей для пользователя deploy
+   → cat ~/.ssh/id_ed25519.pub | ssh root@45.135.234.22 "..."
+   (добавляет ваш SSH ключ через root, т.к. deploy без пароля)
 
 3. Настройка доступа к GitHub
-   → scripts/setup_github_access.sh
+   → ./scripts/setup_github_access.sh
+   (скрипт подключается к серверу и показывает ключ для GitHub)
 
 4. Настройка Nginx
-   → scripts/setup_nginx.sh
+   → ./scripts/setup_nginx.sh
+   (скрипт подключается к серверу и настраивает Nginx)
 ```
 
 ### 2️⃣ Деплой приложения
@@ -54,11 +60,25 @@
 
 ## ⚡ Быстрая команда для первого деплоя
 
+**Все команды выполняются на локальной машине в директории проекта:**
+
 ```bash
-# 1. Настройка сервера
+# 1. Установка sshpass (если нужно)
+sudo apt-get install sshpass  # Ubuntu/Debian
+
+# 2. Настройка сервера (скрипт сам подключится к серверу)
+chmod +x scripts/setup_server.sh
 ./scripts/setup_server.sh
+
+# 3. Настройка SSH ключей для пользователя deploy
 ssh-copy-id deploy@45.135.234.22
+
+# 4. Настройка доступа к GitHub (добавьте показанный ключ в GitHub)
+chmod +x scripts/setup_github_access.sh
 ./scripts/setup_github_access.sh
+
+# 5. Настройка Nginx
+chmod +x scripts/setup_nginx.sh
 ./scripts/setup_nginx.sh
 
 # 2. Подготовка секретов

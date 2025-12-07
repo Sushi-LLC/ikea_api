@@ -162,7 +162,15 @@ REDIS_PASSWORD=
 MONGODB_URI=mongodb://mongodb:27017/ikea
 JWT_SECRET=$(ruby -e "require 'securerandom'; puts SecureRandom.hex(64)")
 POSTGRES_PASSWORD=your_secure_postgres_password_here
+KAMAL_REGISTRY_PASSWORD=your_docker_hub_token_or_password
 EOF
+```
+
+**Примечание:** `KAMAL_REGISTRY_PASSWORD` - это либо:
+- Docker Hub пароль (не рекомендуется для production)
+- Docker Hub Personal Access Token (рекомендуется)
+  - Создайте токен: https://hub.docker.com/settings/security
+  - Или используйте существующий токен
 
 # Убедитесь, что файл не попадет в git
 echo ".kamal/secrets" >> .gitignore

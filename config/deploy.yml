@@ -3,37 +3,40 @@
 
 service: ikea_api
 
-# Docker образ
-image: ikea_api
+# Docker образ (должен включать username для Docker Hub)
+image: sushi0590/ikea_api
 
-# Git репозиторий для деплоя
-git:
-  repo: https://github.com/dmitryS1666/ikea_api.git
-  branch: main
+# Примечание: Kamal автоматически использует текущий git репозиторий
+# из директории, где запускается команда kamal deploy
+
+# SSH пользователь для подключения к серверам
+ssh:
+  user: deploy
 
 # Серверы для деплоя
 servers:
   web:
     hosts:
       - 45.135.234.22
-    user: deploy
-    options:
-      healthcheck:
-        path: /up
-        port: 3000
-      # Kamal автоматически публикует порт 3000
-      # Nginx будет проксировать на localhost:3000
+    # Kamal автоматически публикует порт 3000
+    # Healthcheck настроен через Docker HEALTHCHECK в Dockerfile
+    # Nginx НЕ обязателен - Kamal использует kamal-proxy для маршрутизации
 
-# Docker registry (опционально, можно использовать локальный образ)
-# registry:
-#   username: ${REGISTRY_USERNAME}
-#   password:
-#     - KAMAL_REGISTRY_PASSWORD
+# Docker registry (требуется для Kamal)
+# Docker Hub registry
+registry:
+  server: docker.io
+  username: sushi0590
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+  # Пароль должен быть указан в .kamal/secrets как KAMAL_REGISTRY_PASSWORD
+  # Используйте Docker Hub Personal Access Token
 
 # Builder конфигурация
 builder:
   context: .
   dockerfile: Dockerfile
+  arch: amd64
 
 # Переменные окружения
 env:
@@ -68,12 +71,6 @@ accessories:
         - POSTGRES_PASSWORD
     directories:
       - postgres-data:/var/lib/postgresql/data
-    options:
-      healthcheck:
-        test: pg_isready -U postgres
-        interval: 10s
-        timeout: 5s
-        retries: 5
 
   redis:
     image: redis:7-alpine
@@ -81,12 +78,6 @@ accessories:
     port: 6379
     directories:
       - redis-data:/data
-    options:
-      healthcheck:
-        test: redis-cli ping
-        interval: 10s
-        timeout: 5s
-        retries: 5
 
   mongodb:
     image: mongo:7
@@ -94,9 +85,3 @@ accessories:
     port: 27017
     directories:
       - mongodb-data:/data/db
-    options:
-      healthcheck:
-        test: mongosh --eval "db.adminCommand('ping')"
-        interval: 10s
-        timeout: 5s
-        retries: 5

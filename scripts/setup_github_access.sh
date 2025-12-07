@@ -34,6 +34,11 @@ else
 fi
 
 echo ""
+echo "🌐 Добавление GitHub в known_hosts..."
+ssh_exec "mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null && chmod 600 ~/.ssh/known_hosts"
+echo "✅ GitHub добавлен в known_hosts"
+
+echo ""
 echo "📝 Следующие шаги:"
 echo ""
 echo "1. Скопируйте публичный ключ выше"
@@ -44,8 +49,9 @@ echo "   - Нажмите 'New SSH key'"
 echo "   - Вставьте скопированный ключ"
 echo "   - Сохраните"
 echo ""
-echo "3. Проверьте доступ:"
+echo "3. После добавления ключа в GitHub, проверьте доступ:"
 echo "   ssh deploy@$SERVER_IP 'ssh -T git@github.com'"
+echo "   Должно вернуть: Hi dmitryS1666! You've successfully authenticated..."
 echo ""
 echo "4. После настройки ключа Kamal сможет клонировать репозиторий:"
 echo "   kamal deploy"

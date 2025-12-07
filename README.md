@@ -253,42 +253,72 @@ curl http://localhost:3000/api/v1/products \
 
 **Полная последовательность действий для первого деплоя:**
 
+> ⚠️ **Важно:** Все команды выполняются на **локальной машине** (ваш компьютер), скрипты сами подключаются к серверу через SSH.
+
 1. **Настройка сервера** (один раз)
    ```bash
+   # На локальной машине (в директории проекта)
+   sudo apt-get install sshpass  # Если еще не установлен
    chmod +x scripts/setup_server.sh
-   ./scripts/setup_server.sh
+   ./scripts/setup_server.sh  # Скрипт сам подключится к серверу
    ```
 
 2. **Настройка SSH ключей**
    ```bash
-   ssh-copy-id deploy@45.135.234.22
+   # На локальной машине
+   # Пользователь deploy создан без пароля, добавляем ключ через root:
+   cat ~/.ssh/id_ed25519.pub | ssh root@45.135.234.22 \
+     "mkdir -p /home/deploy/.ssh && \
+      cat >> /home/deploy/.ssh/authorized_keys && \
+      chown -R deploy:deploy /home/deploy/.ssh && \
+      chmod 700 /home/deploy/.ssh && \
+      chmod 600 /home/deploy/.ssh/authorized_keys"
+   # Пароль для root: f8RpYS53tYgLPwnk
    ```
 
 3. **Настройка доступа к GitHub**
    ```bash
+   # На локальной машине
    chmod +x scripts/setup_github_access.sh
    ./scripts/setup_github_access.sh
-   # Добавьте ключ в GitHub
+   # Добавьте показанный ключ в GitHub: https://github.com/settings/keys
    ```
 
 4. **Настройка Nginx**
    ```bash
+   # На локальной машине
    chmod +x scripts/setup_nginx.sh
-   ./scripts/setup_nginx.sh
+   ./scripts/setup_nginx.sh  # Скрипт сам подключится к серверу
    ```
 
 5. **Подготовка секретов**
    ```bash
    mkdir -p .kamal
-   cat > .kamal/secrets << EOF
-   RAILS_MASTER_KEY=$(rails secret)
-   DB_USERNAME=postgres
-   DB_PASSWORD=your_secure_password_here
-   REDIS_PASSWORD=
+   
+   # Генерация паролей
+   DB_PASSWORD=$(openssl rand -base64 32)
+   POSTGRES_PASSWORD=$DB_PASSWORD
    JWT_SECRET=$(ruby -e "require 'securerandom'; puts SecureRandom.hex(64)")
-   POSTGRES_PASSWORD=your_secure_postgres_password_here
+   RAILS_MASTER_KEY=$(rails secret)
+   
+   # Создание файла (замените YOUR_DOCKER_HUB_TOKEN на реальный токен)
+   cat > .kamal/secrets << EOF
+   RAILS_MASTER_KEY=$RAILS_MASTER_KEY
+   DB_USERNAME=postgres
+   DB_PASSWORD=$DB_PASSWORD
+   REDIS_PASSWORD=
+   JWT_SECRET=$JWT_SECRET
+   POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+   KAMAL_REGISTRY_PASSWORD=YOUR_DOCKER_HUB_TOKEN
    EOF
    ```
+   
+   **Где взять Docker Hub токен:**
+   - Перейдите: https://hub.docker.com/settings/security
+   - Создайте "New Access Token"
+   - Скопируйте токен и используйте как `KAMAL_REGISTRY_PASSWORD`
+   
+   **Подробная инструкция:** см. [SECRETS_GUIDE.md](./SECRETS_GUIDE.md)
 
 6. **Установка Kamal**
    ```bash

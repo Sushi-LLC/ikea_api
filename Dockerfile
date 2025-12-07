@@ -62,5 +62,5 @@ HEALTHCHECK --interval=5s --timeout=3s --retries=5 --start-period=30s \
 # Start the server by default, this can be overwritten at runtime
 # Используем порт 80 для kamal-proxy, проксируем на 3000 через socat
 EXPOSE 80
-# Запускаем socat в фоне для проксирования 80->3000, затем запускаем Rails
-CMD ["sh", "-c", "socat TCP-LISTEN:80,fork,reuseaddr TCP:localhost:3000 & exec ./bin/rails server -p 3000"]
+# Entrypoint обработает запуск Rails и socat в правильном порядке
+CMD ["./bin/rails", "server"]

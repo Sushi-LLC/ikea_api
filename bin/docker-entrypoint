@@ -3,6 +3,28 @@
 # If running the rails server then create or migrate existing database
 if [ "${1}" == "./bin/rails" ] && [ "${2}" == "server" ]; then
   ./bin/rails db:prepare
+  
+  # Start Rails in background for port forwarding setup
+  ./bin/rails server -p 3000 &
+  RAILS_PID=$!
+  
+  # Wait for Rails to be ready (max 30 seconds)
+  echo "Waiting for Rails to start on port 3000..."
+  for i in {1..30}; do
+    if curl -f http://localhost:3000/up >/dev/null 2>&1; then
+      echo "✅ Rails is ready on port 3000!"
+      break
+    fi
+    if [ $i -eq 30 ]; then
+      echo "❌ Rails failed to start within 30 seconds"
+      exit 1
+    fi
+    sleep 1
+  done
+  
+  # Start socat for port forwarding 80 -> 3000 (in foreground to keep container alive)
+  echo "Starting socat port forwarding 80 -> 3000..."
+  exec socat TCP-LISTEN:80,fork,reuseaddr TCP:localhost:3000
+else
+  exec "${@}"
 fi
-
-exec "${@}"

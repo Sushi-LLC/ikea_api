@@ -1,6 +1,11 @@
 Rails.application.routes.draw do
   get '/up', to: 'health#check'
   
+  # Swagger авторизация
+  get '/api-docs/login', to: 'swagger#login'
+  post '/api-docs/login', to: 'swagger#login'
+  get '/api-docs/logout', to: 'swagger#logout'
+  
   mount Rswag::Api::Engine => '/api-docs'
   mount Rswag::Ui::Engine => '/api-docs'
   

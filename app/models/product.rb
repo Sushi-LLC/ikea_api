@@ -14,14 +14,14 @@ class Product < ApplicationRecord
   scope :with_category, -> { where.not(category_id: nil) }
   
   # Сериализация массивов
-  serialize :variants, Array
-  serialize :related_products, Array
-  serialize :set_items, Array
-  serialize :bundle_items, Array
-  serialize :images, Array
-  serialize :local_images, Array
-  serialize :videos, Array
-  serialize :manuals, Array
+  serialize :variants, coder: JSON
+  serialize :related_products, coder: JSON
+  serialize :set_items, coder: JSON
+  serialize :bundle_items, coder: JSON
+  serialize :images, coder: JSON
+  serialize :local_images, coder: JSON
+  serialize :videos, coder: JSON
+  serialize :manuals, coder: JSON
   
   # Callbacks
   before_save :calculate_delivery, if: :weight_changed?

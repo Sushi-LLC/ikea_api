@@ -6,6 +6,11 @@ service: ikea_api
 # Docker образ
 image: ikea_api
 
+# Git репозиторий для деплоя
+git:
+  repo: https://github.com/dmitryS1666/ikea_api.git
+  branch: main
+
 # Серверы для деплоя
 servers:
   web:

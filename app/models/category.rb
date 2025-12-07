@@ -6,7 +6,7 @@ class Category < ApplicationRecord
   
   has_many :products, foreign_key: :category_id, primary_key: :ikea_id
   
-  serialize :parent_ids, Array
+  serialize :parent_ids, coder: JSON
   
   scope :popular, -> { where(is_popular: true) }
   scope :active, -> { where(is_deleted: false) }

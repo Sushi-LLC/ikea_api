@@ -39,7 +39,7 @@ FROM base
 
 # Install packages needed for deployment
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y curl postgresql-client && \
+    apt-get install --no-install-recommends -y curl postgresql-client socat && \
     rm -rf /var/lib/apt/lists /var/cache/apt/archives
 
 # Copy built artifacts: gems, application
@@ -49,15 +49,18 @@ COPY --from=build /rails /rails
 # Run and own only the runtime files as a non-root user for security
 RUN useradd rails --create-home --shell /bin/bash && \
     chown -R rails:rails db log tmp
-USER rails:rails
+# Note: We need to run as root to bind to port 80, or use socat for port forwarding
+USER root
 
 # Entrypoint prepares the database.
 ENTRYPOINT ["/rails/bin/docker-entrypoint"]
 
 # Healthcheck для Docker (увеличен интервал для первого запуска)
 HEALTHCHECK --interval=5s --timeout=3s --retries=5 --start-period=30s \
-  CMD curl -f http://localhost:3000/up || exit 1
+  CMD curl -f http://localhost:80/up || exit 1
 
 # Start the server by default, this can be overwritten at runtime
-EXPOSE 3000
-CMD ["./bin/rails", "server"]
+# Используем порт 80 для kamal-proxy, проксируем на 3000 через socat
+EXPOSE 80
+# Запускаем socat в фоне для проксирования 80->3000, затем запускаем Rails
+CMD ["sh", "-c", "socat TCP-LISTEN:80,fork,reuseaddr TCP:localhost:3000 & exec ./bin/rails server -p 3000"]

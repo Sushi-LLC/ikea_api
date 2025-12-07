@@ -1,7 +1,9 @@
 #!/bin/bash -e
 
-# If running the rails server then create or migrate existing database
-if [ "${1}" == "./bin/rails" ] && [ "${2}" == "server" ]; then
+# Check if we're running rails server command
+# Kamal may pass commands as "rails server" or "./bin/rails server"
+if [ "${1}" == "rails" ] && [ "${2}" == "server" ]; then
+  # Rails server command - prepare database and start with socat
   ./bin/rails db:prepare
   
   # Start Rails in background for port forwarding setup
@@ -25,6 +27,34 @@ if [ "${1}" == "./bin/rails" ] && [ "${2}" == "server" ]; then
   # Start socat for port forwarding 80 -> 3000 (in foreground to keep container alive)
   echo "Starting socat port forwarding 80 -> 3000..."
   exec socat TCP-LISTEN:80,fork,reuseaddr TCP:localhost:3000
+elif [ "${1}" == "./bin/rails" ] && [ "${2}" == "server" ]; then
+  # Same as above but with ./bin/rails
+  ./bin/rails db:prepare
+  
+  ./bin/rails server -p 3000 &
+  RAILS_PID=$!
+  
+  echo "Waiting for Rails to start on port 3000..."
+  for i in {1..30}; do
+    if curl -f http://localhost:3000/up >/dev/null 2>&1; then
+      echo "✅ Rails is ready on port 3000!"
+      break
+    fi
+    if [ $i -eq 30 ]; then
+      echo "❌ Rails failed to start within 30 seconds"
+      exit 1
+    fi
+    sleep 1
+  done
+  
+  echo "Starting socat port forwarding 80 -> 3000..."
+  exec socat TCP-LISTEN:80,fork,reuseaddr TCP:localhost:3000
 else
-  exec "${@}"
+  # For other commands (like rails db:create, rails console, etc.), just execute them
+  # If command starts with "rails", replace with "./bin/rails"
+  if [ "${1}" == "rails" ]; then
+    exec ./bin/rails "${@:2}"
+  else
+    exec "${@}"
+  fi
 fi

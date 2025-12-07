@@ -42,10 +42,10 @@ builder:
 env:
   clear:
     RAILS_ENV: production
-    DB_HOST: postgres
+    DB_HOST: ikea_api-postgres
     DB_PORT: 5432
-    REDIS_URL: redis://redis:6379/0
-    MONGODB_URI: mongodb://mongodb:27017/ikea
+    REDIS_URL: redis://ikea_api-redis:6379/0
+    MONGODB_URI: mongodb://ikea_api-mongodb:27017/ikea
   secret:
     - RAILS_MASTER_KEY
     - DB_USERNAME

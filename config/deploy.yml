@@ -18,10 +18,10 @@ servers:
   web:
     hosts:
       - 45.135.234.22
-    # Kamal автоматически публикует порт 3000
-    # Healthcheck настроен через Docker HEALTHCHECK в Dockerfile
-    # Nginx НЕ обязателен - Kamal использует kamal-proxy для маршрутизации
-    # Примечание: kamal-proxy должен подключаться к порту 3000, но это настраивается автоматически
+    # kamal-proxy работает напрямую на порту 80
+    # Rails обслуживает API (/api), Admin (/admin), Swagger (/api-docs) и Frontend (/)
+    # Фронтенд (React) собран в статику и находится в public/
+    # Приложение слушает на порту 3000 внутри контейнера, проксируется на 80 через socat
 
 # Docker registry (требуется для Kamal)
 # Docker Hub registry

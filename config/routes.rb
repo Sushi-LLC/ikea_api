@@ -1,6 +1,9 @@
 Rails.application.routes.draw do
   get '/up', to: 'health#check'
   
+  # Trestle Admin Panel автоматически монтируется на /admin
+  # (см. config/initializers/trestle.rb, config.automount = true)
+  
   # Swagger авторизация
   get '/api-docs/login', to: 'swagger#login'
   post '/api-docs/login', to: 'swagger#login'

@@ -1,0 +1,35 @@
+[Unit]
+Description=IKEA API Puma Server
+After=network.target postgresql.service redis-server.service
+
+[Service]
+Type=notify
+User=deploy
+Group=deploy
+WorkingDirectory=/var/www/ikea_api/current
+Environment="RAILS_ENV=production"
+Environment="PORT=3000"
+Environment="ASDF_DATA_DIR=/home/deploy/.asdf"
+Environment="PATH=/home/deploy/.asdf/shims:/home/deploy/.asdf/bin:/usr/local/bin:/usr/bin:/bin"
+
+# Puma будет использовать конфигурацию из config/puma.rb
+# Socket будет создан в shared/tmp/sockets/puma.sock
+ExecStart=/bin/bash -lc 'source $HOME/.asdf/asdf.sh && cd /var/www/ikea_api/current && asdf local ruby 3.3.0 && bundle exec puma -C config/puma.rb'
+ExecReload=/bin/kill -USR1 $MAINPID
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ikea_api_puma
+
+[Install]
+WantedBy=multi-user.target
+

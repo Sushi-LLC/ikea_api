@@ -29,3 +29,9 @@
 !/storage/.keep
 /tmp/storage/*
 !/tmp/storage/.keep
+
+# Ignore public/ directory (будет заменен React build)
+# React build будет скопирован в public/ во время сборки образа
+/public/*
+!/public/.keep
+!/public/robots.txt

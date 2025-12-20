@@ -32,13 +32,33 @@ end
 worker_timeout 3600 if ENV.fetch("RAILS_ENV", "development") == "development"
 
 # Specifies the `port` that Puma will listen on to receive requests; default is 3000.
-port ENV.fetch("PORT") { 3000 }
+# В production используем Unix socket для лучшей производительности
+# Capistrano3-puma плагин автоматически устанавливает bind через переменные окружения
+if rails_env == "production"
+  # Если PUMA_BIND установлен (Capistrano), используем его
+  # Иначе используем Unix socket по умолчанию
+  if ENV["PUMA_BIND"]
+    # Capistrano установит это через deploy.rb
+  else
+    # Fallback для ручного запуска
+    bind "unix://#{File.expand_path("../../shared/tmp/sockets/puma.sock", __dir__)}"
+  end
+else
+  port ENV.fetch("PORT") { 3000 }
+end
 
 # Specifies the `environment` that Puma will run in.
 environment rails_env
 
 # Specifies the `pidfile` that Puma will use.
+# Capistrano установит это через переменные окружения
 pidfile ENV.fetch("PIDFILE") { "tmp/pids/server.pid" }
+
+# State file для Capistrano (в production)
+# Capistrano установит это через переменные окружения
+if rails_env == "production" && ENV["PUMA_STATE"]
+  state_path ENV["PUMA_STATE"]
+end
 
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart

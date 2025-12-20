@@ -340,8 +340,6 @@ curl http://localhost:3000/api/v1/products \
 ### Документация по деплою
 
 - **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)** - Полное руководство с последовательностью действий
-- **[DEPLOY_KAMAL.md](./DEPLOY_KAMAL.md)** - Детальная инструкция по Kamal
-- **[NGINX_SETUP.md](./NGINX_SETUP.md)** - Настройка Nginx
 
 ## 🏗️ Архитектура
 
@@ -369,12 +367,6 @@ ikea_api/
 ```
 MongoDB (парсер) → PostgreSQL (API) → JSON API → Frontend
 ```
-
-Подробнее: [ARCHITECTURE.md](./ARCHITECTURE.md)
-
-### Схема данных
-
-Подробная информация о моделях и схемах: [DATA_SCHEMA.md](./DATA_SCHEMA.md)
 
 ## 💻 Разработка
 
@@ -417,14 +409,10 @@ rails log:clear
 
 ### Основная документация
 - [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) - **Полное руководство по деплою и настройке сервера**
-- [DEPLOYMENT_SUMMARY.md](./DEPLOYMENT_SUMMARY.md) - Краткая сводка по деплою
 - [SECRETS_GUIDE.md](./SECRETS_GUIDE.md) - Управление секретами и паролями
 - [DOMAIN_SETUP.md](./DOMAIN_SETUP.md) - Настройка домена для Kamal
-- [NGINX_SETUP.md](./NGINX_SETUP.md) - Настройка Nginx (опционально, если не используете kamal-proxy)
 
 ### Техническая документация
-- [ARCHITECTURE.md](./ARCHITECTURE.md) - Архитектура приложения
-- [DATA_SCHEMA.md](./DATA_SCHEMA.md) - Схемы данных MongoDB и PostgreSQL
 - [ADMIN_PANEL_OPTIONS.md](./ADMIN_PANEL_OPTIONS.md) - Варианты админ-панелей для проекта
 - [SEO_SOLUTIONS.md](./SEO_SOLUTIONS.md) - Решения для SEO-оптимизации
 

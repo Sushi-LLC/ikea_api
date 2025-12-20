@@ -59,5 +59,10 @@ end
 group :development do
   # Speed up commands on slow machines / big apps [https://github.com/rails/spring]
   # gem "spring"
+  
+  # Capistrano для деплоя
+  gem "capistrano", "~> 3.18"
+  gem "capistrano-rails", "~> 1.6"
+  gem "capistrano3-puma", "~> 5.2"
 end
 

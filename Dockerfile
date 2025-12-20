@@ -27,11 +27,34 @@ RUN bundle install && \
     rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
     bundle exec bootsnap precompile --gemfile
 
-# Copy application code
+# Copy application code (исключая public/, он будет заменен React build)
 COPY . .
+
+# Удаляем содержимое public/ (кроме .keep и robots.txt)
+# React build будет скопирован позже
+RUN rm -rf public/* && \
+    mkdir -p public && \
+    touch public/.keep
 
 # Precompile bootsnap code for faster boot times
 RUN bundle exec bootsnap precompile app/ lib/
+
+# Stage 2: Build React (если React в отдельном репозитории)
+# Раскомментируйте и настройте, если React в отдельном репозитории:
+# FROM node:20-alpine as react-build
+# WORKDIR /app
+# ARG REACT_REPO_URL
+# ARG REACT_BRANCH=main
+# RUN git clone -b ${REACT_BRANCH} ${REACT_REPO_URL} . || echo "React repo not provided, skipping"
+# RUN npm ci --only=production && npm run build || echo "React build skipped"
+
+# Или если React в поддиректории frontend/:
+# FROM node:20-alpine as react-build
+# WORKDIR /app
+# COPY frontend/package*.json ./
+# RUN npm ci --only=production
+# COPY frontend/ ./
+# RUN npm run build
 
 
 # Final stage for app image
@@ -45,6 +68,14 @@ RUN apt-get update -qq && \
 # Copy built artifacts: gems, application
 COPY --from=build /usr/local/bundle /usr/local/bundle
 COPY --from=build /rails /rails
+
+# Copy React build to public/ (после Rails кода, чтобы не перезаписать)
+# Раскомментируйте, если используете multi-stage build для React:
+# COPY --from=react-build /app/build /rails/public
+
+# ПРИМЕЧАНИЕ: Если React собирается в CI/CD отдельно,
+# то перед docker build нужно скопировать React build в public/:
+#   cp -r /path/to/react-app/build/* public/
 
 # Run and own only the runtime files as a non-root user for security
 RUN useradd rails --create-home --shell /bin/bash && \

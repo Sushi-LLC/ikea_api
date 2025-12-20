@@ -29,6 +29,9 @@ set :default_env, {
   'PATH' => "$HOME/.asdf/shims:$HOME/.asdf/bin:$PATH"
 }
 
+# Загружать переменные окружения из .env файла
+# Это делается через lib/capistrano/tasks/load_env.rake
+
 # Команды, которые должны использовать asdf
 set :asdf_map_bins, %w{rake gem bundle ruby rails puma pumactl}
 

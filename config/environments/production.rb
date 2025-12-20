@@ -19,8 +19,10 @@ Rails.application.configure do
   # key such as config/credentials/production.key. This key is used to decrypt credentials (and other encrypted files).
   # config.require_master_key = true
 
-  # Disable serving static files from `public/`, relying on NGINX to do so instead.
-  config.public_file_server.enabled = false
+  # Enable serving static files from `public/` for Trestle admin assets
+  # NGINX will also serve static files, but Rails needs to serve them for admin panel
+  config.public_file_server.enabled = true
+  config.public_file_server.headers = { 'Cache-Control' => 'public, max-age=31536000' }
 
   # Enable serving of images, stylesheets, and JavaScripts from an asset server.
   # config.asset_host = "http://assets.example.com"

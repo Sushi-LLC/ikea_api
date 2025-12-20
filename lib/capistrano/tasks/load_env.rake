@@ -1,28 +1,40 @@
 # Задача для загрузки переменных окружения из .env файла
-# Модифицирует команды так, чтобы они загружали переменные из .env перед выполнением
+# Загружает переменные из shared/.env и устанавливает их в default_env
 namespace :deploy do
-  desc "Настроить загрузку переменных окружения из .env"
-  task :setup_env_loader do
-    # Используем deploy_to для получения пути к shared/.env
-    deploy_to = fetch(:deploy_to)
-    env_file = "#{deploy_to}/shared/.env"
-    
-    # Модифицируем команды через command_map с префиксом
-    # Это будет применяться ко всем командам, включая rake, bundle, rails
-    SSHKit.config.command_map.prefix[:rake].unshift(
-      "source #{env_file} 2>/dev/null || true &&"
-    )
-    SSHKit.config.command_map.prefix[:bundle].unshift(
-      "source #{env_file} 2>/dev/null || true &&"
-    )
-    SSHKit.config.command_map.prefix[:rails].unshift(
-      "source #{env_file} 2>/dev/null || true &&"
-    )
-    
-    info "✅ Настроена загрузка переменных из #{env_file}"
+  desc "Загрузить переменные окружения из .env"
+  task :load_env do
+    on roles(:all) do |host|
+      within shared_path do
+        if test("[ -f .env ]")
+          # Загрузить переменные из .env на сервере
+          env_vars = capture("cat .env | grep -v '^#' | grep -v '^$'")
+          
+          # Парсим переменные и устанавливаем их в SSHKit default_env
+          env_hash = {}
+          env_vars.split("\n").each do |line|
+            key, value = line.split("=", 2)
+            next if key.nil? || value.nil?
+            key = key.strip
+            value = value.strip
+            # Удалить кавычки если есть
+            value = value.gsub(/^["']|["']$/, '')
+            env_hash[key] = value
+          end
+          
+          # Установить переменные в SSHKit default_env
+          # Это будет применяться ко всем командам, включая rake
+          SSHKit.config.default_env.merge!(env_hash)
+          
+          # Логируем через puts (безопаснее в контексте rake)
+          puts "✅ Загружено #{env_hash.keys.count} переменных из .env: #{env_hash.keys.join(', ')}"
+        else
+          puts "⚠️  Файл .env не найден в #{shared_path}"
+        end
+      end
+    end
   end
 end
 
-# Настраивать загрузку .env перед выполнением задач деплоя
-before "deploy:starting", "deploy:setup_env_loader"
+# Загружать .env перед выполнением задач деплоя
+before "deploy:starting", "deploy:load_env"
 

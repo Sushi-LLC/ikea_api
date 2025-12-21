@@ -1,0 +1,115 @@
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h3>Запуск задач парсинга</h3>
+        </div>
+        <div class="card-body">
+          <%= form_with url: start_task_parser_control_admin_index_path, method: :post, local: true do |f| %>
+            <div class="form-group">
+              <%= f.label :task_type, "Тип задачи" %>
+              <%= f.select :task_type, [
+                ['Категории', 'categories'],
+                ['Продукты', 'products'],
+                ['Хиты продаж', 'bestsellers'],
+                ['Популярные категории', 'popular_categories'],
+                ['Картинки категорий', 'category_images'],
+                ['Картинки продуктов', 'product_images']
+              ], {}, class: "form-control" %>
+            </div>
+            
+            <div class="form-group">
+              <%= f.label :limit, "Лимит записей (необязательно)" %>
+              <%= f.number_field :limit, class: "form-control", placeholder: "Оставьте пустым для без ограничений" %>
+            </div>
+            
+            <%= f.submit "Запустить", class: "btn btn-primary" %>
+          <% end %>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h3>Активные задачи</h3>
+        </div>
+        <div class="card-body">
+          <% if @running_tasks.any? %>
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Тип</th>
+                  <th>Обработано</th>
+                  <th>Действие</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% @running_tasks.each do |task| %>
+                  <tr>
+                    <td><%= task.task_type %></td>
+                    <td><%= task.processed %> / <%= task.limit || '∞' %></td>
+                    <td>
+                      <%= form_with url: stop_task_parser_control_admin_index_path, method: :post, local: true do |f| %>
+                        <%= f.hidden_field :task_id, value: task.id %>
+                        <%= f.submit "Остановить", class: "btn btn-sm btn-danger" %>
+                      <% end %>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+          <% else %>
+            <p class="text-muted">Нет активных задач</p>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h3>Последние задачи</h3>
+        </div>
+        <div class="card-body">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Тип</th>
+                <th>Статус</th>
+                <th>Обработано</th>
+                <th>Создано</th>
+                <th>Обновлено</th>
+                <th>Ошибок</th>
+                <th>Начало</th>
+                <th>Завершено</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% @recent_tasks.each do |task| %>
+                <tr>
+                  <td><%= task.task_type %></td>
+                  <td>
+                    <span class="badge badge-<%= task.status == 'completed' ? 'success' : task.status == 'failed' ? 'danger' : 'primary' %>">
+                      <%= task.status %>
+                    </span>
+                  </td>
+                  <td><%= task.processed %></td>
+                  <td><%= task.created %></td>
+                  <td><%= task.updated %></td>
+                  <td><%= task.error_count %></td>
+                  <td><%= task.started_at&.strftime('%d.%m.%Y %H:%M') %></td>
+                  <td><%= task.completed_at&.strftime('%d.%m.%Y %H:%M') %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

@@ -1,0 +1,304 @@
+<% content_for :page_title do %>
+  <%= @product.name %>
+<% end %>
+
+<div class="product-show">
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h5>Основная информация</h5>
+        </div>
+        <div class="card-body">
+          <table class="table">
+            <tr>
+              <th>SKU:</th>
+              <td><%= @product.sku %></td>
+            </tr>
+            <tr>
+              <th>Item No:</th>
+              <td><%= @product.item_no %></td>
+            </tr>
+            <tr>
+              <th>URL:</th>
+              <td>
+                <% if @product.url.present? %>
+                  <%= link_to @product.url, @product.url, target: '_blank' %>
+                <% else %>
+                  <em class="text-muted">Нет URL</em>
+                <% end %>
+              </td>
+            </tr>
+            <tr>
+              <th>Название (PL):</th>
+              <td><%= @product.name %></td>
+            </tr>
+            <tr>
+              <th>Название (RU):</th>
+              <td><%= @product.name_ru || content_tag(:em, "Нет перевода", class: "text-muted") %></td>
+            </tr>
+            <tr>
+              <th>Коллекция:</th>
+              <td><%= @product.collection || content_tag(:em, "Нет", class: "text-muted") %></td>
+            </tr>
+            <tr>
+              <th>Категория:</th>
+              <td><%= @product.category&.name || 'Без категории' %></td>
+            </tr>
+            <tr>
+              <th>Цена:</th>
+              <td><%= @product.price ? number_to_currency(@product.price, unit: 'BYN', format: '%n %u') : content_tag(:em, "Нет", class: "text-muted") %></td>
+            </tr>
+            <tr>
+              <th>Количество:</th>
+              <td><%= @product.quantity || 0 %></td>
+            </tr>
+            <tr>
+              <th>Хит продаж:</th>
+              <td>
+                <span class="badge <%= @product.is_bestseller? ? 'badge-success' : 'badge-secondary' %>">
+                  <%= @product.is_bestseller? ? 'Да' : 'Нет' %>
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <th>Популярный:</th>
+              <td>
+                <span class="badge <%= @product.is_popular? ? 'badge-success' : 'badge-secondary' %>">
+                  <%= @product.is_popular? ? 'Да' : 'Нет' %>
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <th>Переведён:</th>
+              <td>
+                <span class="badge <%= @product.translated? ? 'badge-success' : 'badge-secondary' %>">
+                  <%= @product.translated? ? 'Да' : 'Нет' %>
+                </span>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h5>Характеристики</h5>
+        </div>
+        <div class="card-body">
+          <table class="table">
+            <tr>
+              <th>Вес:</th>
+              <td><%= @product.weight ? "#{@product.weight} кг" : content_tag(:em, "Нет", class: "text-muted") %></td>
+            </tr>
+            <tr>
+              <th>Чистый вес:</th>
+              <td><%= @product.net_weight ? "#{@product.net_weight} кг" : content_tag(:em, "Нет", class: "text-muted") %></td>
+            </tr>
+            <tr>
+              <th>Объём упаковки:</th>
+              <td><%= @product.package_volume ? "#{@product.package_volume} л" : content_tag(:em, "Нет", class: "text-muted") %></td>
+            </tr>
+            <tr>
+              <th>Размеры упаковки:</th>
+              <td><%= @product.package_dimensions || content_tag(:em, "Нет", class: "text-muted") %></td>
+            </tr>
+            <tr>
+              <th>Размеры:</th>
+              <td><%= @product.dimensions || content_tag(:em, "Нет", class: "text-muted") %></td>
+            </tr>
+            <tr>
+              <th>Посылка:</th>
+              <td>
+                <span class="badge <%= @product.is_parcel? ? 'badge-success' : 'badge-secondary' %>">
+                  <%= @product.is_parcel? ? 'Да' : 'Нет' %>
+                </span>
+              </td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5>Картинки продукта</h5>
+        </div>
+        <div class="card-body">
+          <% 
+            # Получаем remote images
+            remote_images = if @product.images.is_a?(Array)
+                              @product.images
+                            elsif @product.images.is_a?(String) && @product.images.present?
+                              begin
+                                JSON.parse(@product.images)
+                              rescue
+                                []
+                              end
+                            else
+                              []
+                            end
+
+            # Получаем local images
+            local_images = if @product.local_images.is_a?(Array)
+                             @product.local_images
+                           elsif @product.local_images.is_a?(String) && @product.local_images.present?
+                             begin
+                               JSON.parse(@product.local_images)
+                             rescue
+                               []
+                             end
+                           else
+                             []
+                           end
+          %>
+
+          <% if remote_images.any? || local_images.any? %>
+            <% if remote_images.any? %>
+              <h6 class="mt-3">Удалённые картинки (<%= remote_images.length %>)</h6>
+              <div class="row mb-4">
+                <% remote_images.each do |image_url| %>
+                  <div class="col-sm-3 col-md-2 mb-3">
+                    <div class="product-image-thumbnail" style="border: 1px solid #ddd; border-radius: 4px; padding: 5px; text-align: center;">
+                      <%= link_to image_url, target: '_blank', title: image_url do %>
+                        <%= image_tag(image_url, class: 'img-fluid', style: 'max-width: 100%; height: auto;', onerror: "this.style.display='none'; this.parentElement.innerHTML='<em class=\\'text-muted\\'>Ошибка загрузки</em>';") %>
+                      <% end %>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+
+            <% if local_images.any? %>
+              <h6 class="mt-3">Локальные картинки (<%= local_images.length %>)</h6>
+              <div class="row mb-4">
+                <% local_images.each do |image_path| %>
+                  <% full_path = image_path.start_with?('/') ? image_path : "/#{image_path}" %>
+                  <div class="col-sm-3 col-md-2 mb-3">
+                    <div class="product-image-thumbnail" style="border: 1px solid #ddd; border-radius: 4px; padding: 5px; text-align: center;">
+                      <%= link_to full_path, target: '_blank', title: image_path do %>
+                        <%= image_tag(full_path, class: 'img-fluid', style: 'max-width: 100%; height: auto;', onerror: "this.style.display='none'; this.parentElement.innerHTML='<em class=\\'text-muted\\'>Ошибка загрузки</em>';") %>
+                      <% end %>
+                    </div>
+                  </div>
+                <% end %>
+              </div>
+            <% end %>
+          <% else %>
+            <p class="text-muted">Картинки не загружены</p>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <% if @product.content.present? || @product.content_ru.present? || @product.material_info.present? || @product.material_info_ru.present? || @product.good_info.present? || @product.good_info_ru.present? %>
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5>Контент</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <% if @product.content.present? || @product.content_ru.present? %>
+                <div class="col-md-6">
+                  <h6>Описание (PL)</h6>
+                  <div class="border p-3 mb-3" style="min-height: 100px;">
+                    <%= @product.content&.html_safe || content_tag(:em, "Нет описания", class: "text-muted") %>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <h6>Описание (RU)</h6>
+                  <div class="border p-3 mb-3" style="min-height: 100px;">
+                    <%= @product.content_ru&.html_safe || content_tag(:em, "Нет описания", class: "text-muted") %>
+                  </div>
+                </div>
+              <% end %>
+
+              <% if @product.material_info.present? || @product.material_info_ru.present? %>
+                <div class="col-md-6">
+                  <h6>Материалы (PL)</h6>
+                  <div class="border p-3 mb-3" style="min-height: 100px;">
+                    <%= @product.material_info&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <h6>Материалы (RU)</h6>
+                  <div class="border p-3 mb-3" style="min-height: 100px;">
+                    <%= @product.material_info_ru&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
+                  </div>
+                </div>
+              <% end %>
+
+              <% if @product.good_info.present? || @product.good_info_ru.present? %>
+                <div class="col-md-6">
+                  <h6>Детали товара (PL)</h6>
+                  <div class="border p-3 mb-3" style="min-height: 100px;">
+                    <%= @product.good_info&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <h6>Детали товара (RU)</h6>
+                  <div class="border p-3 mb-3" style="min-height: 100px;">
+                    <%= @product.good_info_ru&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
+                  </div>
+                </div>
+              <% end %>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% end %>
+
+  <% if @product.delivery_type.present? || @product.delivery_name.present? || @product.delivery_cost.present? %>
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5>Доставка</h5>
+          </div>
+          <div class="card-body">
+            <table class="table">
+              <tr>
+                <th>Тип доставки:</th>
+                <td><%= @product.delivery_type || content_tag(:em, "Нет", class: "text-muted") %></td>
+              </tr>
+              <tr>
+                <th>Название доставки:</th>
+                <td><%= @product.delivery_name || content_tag(:em, "Нет", class: "text-muted") %></td>
+              </tr>
+              <tr>
+                <th>Стоимость доставки:</th>
+                <td><%= @product.delivery_cost ? number_to_currency(@product.delivery_cost, unit: 'BYN', format: '%n %u') : content_tag(:em, "Нет", class: "text-muted") %></td>
+              </tr>
+              <tr>
+                <th>Причина доставки:</th>
+                <td><%= @product.delivery_reason || content_tag(:em, "Нет", class: "text-muted") %></td>
+              </tr>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<style>
+  .product-image-thumbnail {
+    transition: transform 0.2s;
+  }
+  .product-image-thumbnail:hover {
+    transform: scale(1.05);
+  }
+  .product-image-thumbnail img {
+    cursor: pointer;
+  }
+</style>
+

@@ -31,11 +31,19 @@ gem "jwt"
 gem "pry-rails"
 gem "annotate"
 
-# MongoDB синхронизация
-gem "mongo", "~> 2.18"
-gem "connection_pool", "~> 2.4"
+# Background jobs
 gem "sidekiq", "~> 7.3"
 gem "sidekiq-cron", "~> 1.12"
+gem "fugit", "~> 1.8" # Для парсинга cron выражений
+
+# HTTP клиент для работы с API IKEA
+gem "httparty", "~> 0.21"
+
+# HTML парсинг для детальных страниц продуктов
+gem "nokogiri", "~> 1.15"
+
+# Telegram уведомления
+gem "telegram-bot"
 
 # Pagination
 gem "kaminari"
@@ -55,6 +63,7 @@ group :development, :test do
   gem "debug", platforms: %i[ mri windows ]
   gem "rspec-rails"
   gem "factory_bot_rails"
+  gem "shoulda-matchers", "~> 6.0"
 end
 
 group :development do

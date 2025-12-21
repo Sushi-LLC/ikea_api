@@ -32,6 +32,13 @@ Trestle.resource(:products, model: Product) do
     actions
   end
 
+  controller do
+    def show
+      @product = admin.find_instance(params)
+      render "trestle/products/show"
+    end
+  end
+
   form do |product|
     tab :basic, label: "Основная информация" do
       text_field :sku

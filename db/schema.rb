@@ -10,20 +10,9 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_12_20_020028) do
+ActiveRecord::Schema[7.1].define(version: 2025_12_21_181900) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
-
-  create_table "administrators", force: :cascade do |t|
-    t.string "email"
-    t.string "password_digest"
-    t.string "first_name"
-    t.string "last_name"
-    t.string "remember_token"
-    t.datetime "remember_token_expires_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-  end
 
   create_table "categories", force: :cascade do |t|
     t.string "ikea_id"
@@ -42,6 +31,19 @@ ActiveRecord::Schema[7.1].define(version: 2025_12_20_020028) do
     t.index ["ikea_id"], name: "index_categories_on_ikea_id", unique: true
     t.index ["is_popular"], name: "index_categories_on_is_popular"
     t.index ["unique_id"], name: "index_categories_on_unique_id", unique: true, where: "(unique_id IS NOT NULL)"
+  end
+
+  create_table "cron_schedules", force: :cascade do |t|
+    t.string "task_type", null: false
+    t.string "schedule", null: false
+    t.boolean "enabled", default: true
+    t.datetime "last_run_at"
+    t.datetime "next_run_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["enabled"], name: "index_cron_schedules_on_enabled"
+    t.index ["next_run_at"], name: "index_cron_schedules_on_next_run_at"
+    t.index ["task_type"], name: "index_cron_schedules_on_task_type", unique: true
   end
 
   create_table "deliveries", force: :cascade do |t|
@@ -73,6 +75,25 @@ ActiveRecord::Schema[7.1].define(version: 2025_12_20_020028) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["parameter"], name: "index_filters_on_parameter", unique: true
+  end
+
+  create_table "parser_tasks", force: :cascade do |t|
+    t.string "task_type", null: false
+    t.string "status", default: "pending"
+    t.integer "limit"
+    t.integer "processed", default: 0
+    t.integer "created", default: 0
+    t.integer "updated", default: 0
+    t.integer "error_count", default: 0
+    t.datetime "started_at"
+    t.datetime "completed_at"
+    t.text "error_message"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_at"], name: "index_parser_tasks_on_created_at"
+    t.index ["status"], name: "index_parser_tasks_on_status"
+    t.index ["task_type", "status"], name: "index_parser_tasks_on_task_type_and_status"
+    t.index ["task_type"], name: "index_parser_tasks_on_task_type"
   end
 
   create_table "product_filter_values", force: :cascade do |t|
@@ -134,6 +155,16 @@ ActiveRecord::Schema[7.1].define(version: 2025_12_20_020028) do
     t.index ["sku"], name: "index_products_on_sku", unique: true
     t.index ["unique_id"], name: "index_products_on_unique_id", unique: true, where: "(unique_id IS NOT NULL)"
     t.index ["updated_at"], name: "index_products_on_updated_at"
+  end
+
+  create_table "translation_caches", force: :cascade do |t|
+    t.text "text", null: false
+    t.string "target_language", limit: 10, null: false
+    t.string "source_language", limit: 10, null: false
+    t.text "translated_text", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["text", "target_language", "source_language"], name: "index_translation_caches_on_text_and_languages", unique: true
   end
 
   create_table "users", force: :cascade do |t|

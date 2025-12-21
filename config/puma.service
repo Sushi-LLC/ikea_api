@@ -8,13 +8,14 @@ User=deploy
 Group=deploy
 WorkingDirectory=/var/www/ikea_api/current
 Environment="RAILS_ENV=production"
-Environment="PORT=3000"
 Environment="ASDF_DATA_DIR=/home/deploy/.asdf"
 Environment="PATH=/home/deploy/.asdf/shims:/home/deploy/.asdf/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=/var/www/ikea_api/shared/.env
 
 # Puma будет использовать конфигурацию из config/puma.rb
 # Socket будет создан в shared/tmp/sockets/puma.sock
-ExecStart=/bin/bash -lc 'source $HOME/.asdf/asdf.sh && cd /var/www/ikea_api/current && asdf local ruby 3.3.0 && bundle exec puma -C config/puma.rb'
+# Загружаем переменные из .env и устанавливаем PUMA_BIND для Unix socket
+ExecStart=/bin/bash -lc 'source $HOME/.asdf/asdf.sh && source /var/www/ikea_api/shared/.env && cd /var/www/ikea_api/current && export PUMA_BIND="unix:///var/www/ikea_api/shared/tmp/sockets/puma.sock" && export PUMA_STATE="/var/www/ikea_api/shared/tmp/pids/puma.state" && export PUMA_PID="/var/www/ikea_api/shared/tmp/pids/puma.pid" && bundle exec puma -C config/puma.rb'
 ExecReload=/bin/kill -USR1 $MAINPID
 
 # Restart policy

@@ -7,7 +7,7 @@ Trestle.resource(:popular_categories, model: Category) do
   table do
     column :ikea_id
     column :name, link: true
-    column :name_ru
+    column :translated_name
     column :is_popular do |category|
       status_tag(category.is_popular? ? 'Да' : 'Нет', 
                  category.is_popular? ? :success : :secondary)

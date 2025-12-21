@@ -9,5 +9,6 @@ class Category < ApplicationRecord
   serialize :parent_ids, coder: JSON
   
   scope :popular, -> { where(is_popular: true) }
-  scope :active, -> { where(is_deleted: false) }
+  scope :active, -> { where(is_deleted: [false, nil]) }
+  scope :not_deleted, -> { where(is_deleted: [false, nil]) }
 end

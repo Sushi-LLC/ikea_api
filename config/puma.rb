@@ -35,13 +35,13 @@ worker_timeout 3600 if ENV.fetch("RAILS_ENV", "development") == "development"
 # В production используем Unix socket для лучшей производительности
 # Capistrano3-puma плагин автоматически устанавливает bind через переменные окружения
 if rails_env == "production"
-  # Если PUMA_BIND установлен (Capistrano), используем его
-  # Иначе используем Unix socket по умолчанию
+  # Если PUMA_BIND установлен (Capistrano или systemd), используем его
   if ENV["PUMA_BIND"]
-    # Capistrano установит это через deploy.rb
+    bind ENV["PUMA_BIND"]
   else
-    # Fallback для ручного запуска
-    bind "unix://#{File.expand_path("../../shared/tmp/sockets/puma.sock", __dir__)}"
+    # Fallback для ручного запуска - используем абсолютный путь
+    shared_path = File.expand_path("../../../shared", __dir__)
+    bind "unix://#{shared_path}/tmp/sockets/puma.sock"
   end
 else
   port ENV.fetch("PORT") { 3000 }

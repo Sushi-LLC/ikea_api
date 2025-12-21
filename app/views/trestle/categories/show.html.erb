@@ -1,0 +1,190 @@
+<% content_for :page_title do %>
+  <%= @category.name %>
+<% end %>
+
+<div class="category-show">
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h5>Основная информация</h5>
+        </div>
+        <div class="card-body">
+          <table class="table">
+            <tr>
+              <th>IKEA ID:</th>
+              <td><%= @category.ikea_id %></td>
+            </tr>
+            <tr>
+              <th>Unique ID:</th>
+              <td><%= @category.unique_id || content_tag(:em, "Нет", class: "text-muted") %></td>
+            </tr>
+            <tr>
+              <th>URL:</th>
+              <td>
+                <% if @category.url.present? %>
+                  <%= link_to @category.url, @category.url, target: '_blank' %>
+                <% else %>
+                  <em class="text-muted">Нет URL</em>
+                <% end %>
+              </td>
+            </tr>
+            <tr>
+              <th>Название (PL):</th>
+              <td><%= @category.name %></td>
+            </tr>
+            <tr>
+              <th>Название (RU):</th>
+              <td><%= @category.translated_name || content_tag(:em, "Нет перевода", class: "text-muted") %></td>
+            </tr>
+            <tr>
+              <th>Популярная:</th>
+              <td>
+                <span class="badge <%= @category.is_popular? ? 'badge-success' : 'badge-secondary' %>">
+                  <%= @category.is_popular? ? 'Да' : 'Нет' %>
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <th>Важная:</th>
+              <td>
+                <span class="badge <%= @category.is_important? ? 'badge-success' : 'badge-secondary' %>">
+                  <%= @category.is_important? ? 'Да' : 'Нет' %>
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <th>Статус:</th>
+              <td>
+                <span class="badge <%= @category.is_deleted? ? 'badge-danger' : 'badge-success' %>">
+                  <%= @category.is_deleted? ? 'Удалена' : 'Активна' %>
+                </span>
+              </td>
+            </tr>
+            <tr>
+              <th>Количество продуктов:</th>
+              <td><%= @category.products.count %></td>
+            </tr>
+            <% if @category.parent_ids.present? %>
+              <tr>
+                <th>Родительские категории:</th>
+                <td>
+                  <% parent_ids = @category.parent_ids.is_a?(Array) ? @category.parent_ids : (JSON.parse(@category.parent_ids) rescue []) %>
+                  <% if parent_ids.any? %>
+                    <%= parent_ids.join(', ') %>
+                  <% else %>
+                    <em class="text-muted">Нет</em>
+                  <% end %>
+                </td>
+              </tr>
+            <% end %>
+            <tr>
+              <th>Создана:</th>
+              <td><%= @category.created_at.strftime('%d.%m.%Y %H:%M') if @category.created_at %></td>
+            </tr>
+            <tr>
+              <th>Обновлена:</th>
+              <td><%= @category.updated_at.strftime('%d.%m.%Y %H:%M') if @category.updated_at %></td>
+            </tr>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h5>Картинка категории</h5>
+        </div>
+        <div class="card-body">
+          <% if @category.remote_image_url.present? || @category.local_image_path.present? %>
+            <div class="category-image-container" style="text-align: center;">
+              <% if @category.local_image_path.present? %>
+                <% full_path = @category.local_image_path.start_with?('/') ? @category.local_image_path : "/#{@category.local_image_path}" %>
+                <div class="mb-3">
+                  <h6>Локальная картинка</h6>
+                  <%= link_to full_path, target: '_blank', title: @category.local_image_path do %>
+                    <%= image_tag(full_path, class: 'img-fluid', style: 'max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 5px;', onerror: "this.style.display='none'; this.parentElement.innerHTML='<em class=\\'text-muted\\'>Ошибка загрузки</em>';") %>
+                  <% end %>
+                  <p class="text-muted small mt-2"><%= @category.local_image_path %></p>
+                </div>
+              <% end %>
+
+              <% if @category.remote_image_url.present? %>
+                <div class="mb-3">
+                  <h6>Удалённая картинка</h6>
+                  <%= link_to @category.remote_image_url, target: '_blank', title: @category.remote_image_url do %>
+                    <%= image_tag(@category.remote_image_url, class: 'img-fluid', style: 'max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 5px;', onerror: "this.style.display='none'; this.parentElement.innerHTML='<em class=\\'text-muted\\'>Ошибка загрузки</em>';") %>
+                  <% end %>
+                  <p class="text-muted small mt-2">
+                    <%= link_to @category.remote_image_url, @category.remote_image_url, target: '_blank', class: 'text-break' %>
+                  </p>
+                </div>
+              <% end %>
+            </div>
+          <% else %>
+            <p class="text-muted">Картинка не загружена</p>
+            <% if @category.remote_image_url.blank? %>
+              <p class="text-muted small">Нет удалённого URL картинки</p>
+            <% end %>
+            <% if @category.local_image_path.blank? && @category.remote_image_url.present? %>
+              <p class="text-muted small">Удалённая картинка есть, но локальная не загружена. Запустите загрузку картинок категорий.</p>
+            <% end %>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <% if @category.products.any? %>
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5>Продукты в категории (<%= @category.products.count %>)</h5>
+          </div>
+          <div class="card-body">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>SKU</th>
+                  <th>Название</th>
+                  <th>Название (RU)</th>
+                  <th>Цена</th>
+                  <th>Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% @category.products.limit(20).each do |product| %>
+                  <tr>
+                    <td><%= product.sku %></td>
+                    <td><%= product.name %></td>
+                    <td><%= product.name_ru || content_tag(:em, "Нет", class: "text-muted") %></td>
+                    <td><%= product.price ? number_to_currency(product.price, unit: 'BYN', format: '%n %u') : '-' %></td>
+                    <td>
+                      <%= link_to 'Просмотр', admin.instance_path(product), class: 'btn btn-sm btn-primary' %>
+                    </td>
+                  </tr>
+                <% end %>
+              </tbody>
+            </table>
+            <% if @category.products.count > 20 %>
+              <p class="text-muted small">Показано 20 из <%= @category.products.count %> продуктов</p>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% end %>
+</div>
+
+<style>
+  .category-image-container img {
+    transition: transform 0.2s;
+    cursor: pointer;
+  }
+  .category-image-container img:hover {
+    transform: scale(1.05);
+  }
+</style>
+

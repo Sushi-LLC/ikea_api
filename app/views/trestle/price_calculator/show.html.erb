@@ -1,0 +1,172 @@
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-header">
+          <h3>Калькулятор цены товара</h3>
+        </div>
+        <div class="card-body">
+          <%= form_tag admin.instance_path(PriceCalculator.new(id: 'show')), method: :get, data: { turbo: false } do %>
+            <div class="form-group">
+              <%= label_tag :product_price, "Цена товара (PLN)", class: "form-label" %>
+              <%= number_field_tag :product_price, params[:product_price], 
+                  class: "form-control", step: 0.01, min: 0, required: true, placeholder: "0.00" %>
+            </div>
+            
+            <div class="form-group">
+              <%= label_tag :weight, "Вес товара (кг)", class: "form-label" %>
+              <%= number_field_tag :weight, params[:weight], 
+                  class: "form-control", step: 0.01, min: 0, required: true, placeholder: "0.00" %>
+            </div>
+            
+            <div class="form-group">
+              <%= label_tag :use_gls, class: "form-check-label" do %>
+                <%= check_box_tag :use_gls, '1', params[:use_gls] == '1', class: "form-check-input" %>
+                Использовать пункт отбора GLS (бесплатно для 1-30 кг)
+              <% end %>
+            </div>
+            
+            <div class="form-group">
+              <%= label_tag :date, "Дата курсов валют", class: "form-label" %>
+              <%= date_field_tag :date, params[:date] || Date.today, class: "form-control" %>
+            </div>
+            
+            <%= hidden_field_tag :calculate, '1' %>
+            <%= submit_tag "Рассчитать", class: "btn btn-primary" %>
+          <% end %>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-6">
+      <% if @error %>
+        <div class="alert alert-danger">
+          <%= @error %>
+        </div>
+      <% end %>
+      
+      <% if @calculation %>
+        <div class="card">
+          <div class="card-header">
+            <h3>Результат расчета</h3>
+          </div>
+          <div class="card-body">
+            <h4 class="text-primary mb-4">
+              Итоговая цена: <strong><%= number_to_currency(@calculation[:total_price_byn], unit: 'BYN', format: '%n %u', precision: 2) %></strong>
+            </h4>
+            
+            <h5>Детализация:</h5>
+            <table class="table table-sm">
+              <tr>
+                <td>Цена товара (PLN):</td>
+                <td class="text-right"><%= number_to_currency(@calculation[:product_price_zl], unit: 'PLN', format: '%n %u', precision: 2) %></td>
+              </tr>
+              <tr>
+                <td>Цена товара (BYN):</td>
+                <td class="text-right"><%= number_to_currency(@calculation[:product_price_byn], unit: 'BYN', format: '%n %u', precision: 2) %></td>
+              </tr>
+              <tr>
+                <td>Доставка по Польше (PLN):</td>
+                <td class="text-right"><%= number_to_currency(@calculation[:poland_delivery_zl], unit: 'PLN', format: '%n %u', precision: 2) %></td>
+              </tr>
+              <tr>
+                <td>Доставка по Польше (BYN):</td>
+                <td class="text-right"><%= number_to_currency(@calculation[:poland_delivery_byn], unit: 'BYN', format: '%n %u', precision: 2) %></td>
+              </tr>
+              <tr>
+                <td>Доставка по Беларуси (EUR):</td>
+                <td class="text-right"><%= number_to_currency(@calculation[:belarus_delivery_eur], unit: 'EUR', format: '%n %u', precision: 2) %></td>
+              </tr>
+              <tr>
+                <td>Доставка по Беларуси (BYN):</td>
+                <td class="text-right"><%= number_to_currency(@calculation[:belarus_delivery_byn], unit: 'BYN', format: '%n %u', precision: 2) %></td>
+              </tr>
+              <tr>
+                <td>Таможенная пошлина (EUR):</td>
+                <td class="text-right"><%= number_to_currency(@calculation[:customs_duty_eur], unit: 'EUR', format: '%n %u', precision: 2) %></td>
+              </tr>
+              <tr>
+                <td>Таможенная пошлина (BYN):</td>
+                <td class="text-right"><%= number_to_currency(@calculation[:customs_duty_byn], unit: 'BYN', format: '%n %u', precision: 2) %></td>
+              </tr>
+              <tr>
+                <td>Таможенный сбор (BYN):</td>
+                <td class="text-right"><%= number_to_currency(@calculation[:customs_fee_byn], unit: 'BYN', format: '%n %u', precision: 2) %></td>
+              </tr>
+              <tr class="table-primary">
+                <td><strong>ИТОГО (BYN):</strong></td>
+                <td class="text-right"><strong><%= number_to_currency(@calculation[:total_price_byn], unit: 'BYN', format: '%n %u', precision: 2) %></strong></td>
+              </tr>
+            </table>
+            
+            <h5 class="mt-4">Курсы валют:</h5>
+            <table class="table table-sm">
+              <tr>
+                <td>Курс PLN (НБ РБ):</td>
+                <td class="text-right"><%= @calculation[:pln_rate] %></td>
+              </tr>
+              <tr>
+                <td>Курс PLN (с маржой 10%):</td>
+                <td class="text-right"><%= @calculation[:pln_rate_with_margin] %></td>
+              </tr>
+              <tr>
+                <td>Курс EUR (НБ РБ):</td>
+                <td class="text-right"><%= @calculation[:eur_rate] %></td>
+              </tr>
+              <tr>
+                <td>Курс EUR (с маржой 10%):</td>
+                <td class="text-right"><%= @calculation[:eur_rate_with_margin] %></td>
+              </tr>
+            </table>
+            
+            <% if @calculation[:customs_details][:scenario] != 4 %>
+              <h5 class="mt-4">Детали таможенной пошлины:</h5>
+              <table class="table table-sm">
+                <tr>
+                  <td>Сценарий:</td>
+                  <td class="text-right">
+                    <% case @calculation[:customs_details][:scenario] %>
+                    <% when 1 %>
+                      Превышение стоимостного лимита
+                    <% when 2 %>
+                      Превышение весового лимита
+                    <% when 3 %>
+                      Двойное превышение
+                    <% end %>
+                  </td>
+                </tr>
+                <% if @calculation[:customs_details][:cost_limit_exceeded] %>
+                  <tr>
+                    <td>Превышение стоимости:</td>
+                    <td class="text-right"><%= number_to_currency(@calculation[:customs_details][:cost_excess], unit: 'EUR', format: '%n %u', precision: 2) %></td>
+                  </tr>
+                <% end %>
+                <% if @calculation[:customs_details][:weight_limit_exceeded] %>
+                  <tr>
+                    <td>Превышение веса:</td>
+                    <td class="text-right"><%= @calculation[:customs_details][:weight_excess].round(2) %> кг</td>
+                  </tr>
+                <% end %>
+                <% if @calculation[:customs_details][:scenario] == 3 %>
+                  <tr>
+                    <td>Пошлина по стоимости:</td>
+                    <td class="text-right"><%= number_to_currency(@calculation[:customs_details][:duty_by_cost_eur], unit: 'EUR', format: '%n %u', precision: 2) %></td>
+                  </tr>
+                  <tr>
+                    <td>Пошлина по весу:</td>
+                    <td class="text-right"><%= number_to_currency(@calculation[:customs_details][:duty_by_weight_eur], unit: 'EUR', format: '%n %u', precision: 2) %></td>
+                  </tr>
+                  <tr>
+                    <td>Применена пошлина:</td>
+                    <td class="text-right"><%= @calculation[:customs_details][:max_duty_used] == 'cost' ? 'По стоимости' : 'По весу' %></td>
+                  </tr>
+                <% end %>
+              </table>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    </div>
+  </div>
+</div>
+

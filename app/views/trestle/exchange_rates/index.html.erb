@@ -1,0 +1,10 @@
+<% content_for :toolbar do %>
+  <div class="btn-toolbar">
+    <%= form_tag admin.path(:sync), method: :post, data: { turbo: false }, class: "form-inline" do %>
+      <%= date_field_tag :date, Date.today, class: "form-control mr-2" %>
+      <%= submit_tag "Синхронизировать курсы из API НБ РБ", class: "btn btn-primary", 
+          data: { confirm: "Обновить курсы валют из API НБ РБ?" } %>
+    <% end %>
+  </div>
+<% end %>
+

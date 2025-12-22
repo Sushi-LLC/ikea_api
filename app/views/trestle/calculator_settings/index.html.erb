@@ -1,0 +1,9 @@
+<% content_for :toolbar do %>
+  <div class="btn-toolbar">
+    <%= form_tag admin.path(:initialize_defaults), method: :post, data: { turbo: false }, class: "form-inline" do %>
+      <%= submit_tag "Инициализировать настройки по умолчанию", class: "btn btn-primary", 
+          data: { confirm: "Это создаст/обновит все настройки значениями по умолчанию. Продолжить?" } %>
+    <% end %>
+  </div>
+<% end %>
+

@@ -69,14 +69,6 @@
                 </span>
               </td>
             </tr>
-            <tr>
-              <th>Переведён:</th>
-              <td>
-                <span class="badge <%= @product.translated? ? 'badge-success' : 'badge-secondary' %>">
-                  <%= @product.translated? ? 'Да' : 'Нет' %>
-                </span>
-              </td>
-            </tr>
           </table>
         </div>
       </div>
@@ -118,8 +110,8 @@
               </td>
             </tr>
             <tr>
-              <th>Краткое описание:</th>
-              <td><%= @product.short_description&.html_safe || content_tag(:em, "Нет", class: "text-muted") %></td>
+              <th>Оисание:</th>
+              <td><%= @product.content_ru&.html_safe || content_tag(:em, "Нет описания", class: "text-muted") %></td>
             </tr>
           </table>
         </div>
@@ -222,119 +214,6 @@
       </div>
     </div>
   </div>
-
-  <% if @product.content.present? || @product.content_ru.present? || @product.material_info.present? || @product.material_info_ru.present? || @product.good_info.present? || @product.good_info_ru.present? || @product.short_description.present? || @product.materials.present? || @product.features.present? || @product.care_instructions.present? || @product.environmental_info.present? %>
-    <div class="row mt-4">
-      <div class="col-12">
-        <div class="card">
-          <div class="card-header">
-            <h5>Контент и описание</h5>
-          </div>
-          <div class="card-body">
-            <div class="row">
-              <% if @product.short_description.present? %>
-                <div class="col-12 mb-4">
-                  <h6>Краткое описание</h6>
-                  <div class="border p-3" style="min-height: 50px;">
-                    <%= @product.short_description&.html_safe || content_tag(:em, "Нет", class: "text-muted") %>
-                  </div>
-                </div>
-              <% end %>
-
-              <% if @product.content.present? || @product.content_ru.present? %>
-                <div class="col-md-6">
-                  <h6>Описание (PL)</h6>
-                  <div class="border p-3 mb-3" style="min-height: 100px;">
-                    <%= @product.content&.html_safe || content_tag(:em, "Нет описания", class: "text-muted") %>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <h6>Описание (RU)</h6>
-                  <div class="border p-3 mb-3" style="min-height: 100px;">
-                    <%= @product.content_ru&.html_safe || content_tag(:em, "Нет описания", class: "text-muted") %>
-                  </div>
-                </div>
-              <% end %>
-
-              <% if @product.materials.present? %>
-                <div class="col-12 mb-3">
-                  <h6>Материалы</h6>
-                  <div class="border p-3" style="min-height: 50px;">
-                    <%= @product.materials.is_a?(Array) ? simple_format(@product.materials.join("\n")) : @product.materials&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
-                  </div>
-                </div>
-              <% end %>
-
-              <% if @product.material_info.present? || @product.material_info_ru.present? %>
-                <div class="col-md-6">
-                  <h6>Материалы (PL)</h6>
-                  <div class="border p-3 mb-3" style="min-height: 100px;">
-                    <%= @product.material_info&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <h6>Материалы (RU)</h6>
-                  <div class="border p-3 mb-3" style="min-height: 100px;">
-                    <%= @product.material_info_ru&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
-                  </div>
-                </div>
-              <% end %>
-
-              <% if @product.features.present? %>
-                <div class="col-12 mb-3">
-                  <h6>Характеристики</h6>
-                  <div class="border p-3" style="min-height: 50px;">
-                    <% if @product.features.is_a?(Array) %>
-                      <ul class="mb-0">
-                        <% @product.features.each do |feature| %>
-                          <li><%= feature.is_a?(Hash) ? feature.to_json : feature %></li>
-                        <% end %>
-                      </ul>
-                    <% else %>
-                      <%= @product.features&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
-                    <% end %>
-                  </div>
-                </div>
-              <% end %>
-
-              <% if @product.care_instructions.present? %>
-                <div class="col-12 mb-3">
-                  <h6>Инструкции по уходу</h6>
-                  <div class="border p-3" style="min-height: 50px;">
-                    <%= @product.care_instructions&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
-                  </div>
-                </div>
-              <% end %>
-
-              <% if @product.environmental_info.present? %>
-                <div class="col-12 mb-3">
-                  <h6>Экологическая информация</h6>
-                  <div class="border p-3" style="min-height: 50px;">
-                    <%= @product.environmental_info&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
-                  </div>
-                </div>
-              <% end %>
-
-              <% if @product.good_info.present? || @product.good_info_ru.present? %>
-                <div class="col-md-6">
-                  <h6>Детали товара (PL)</h6>
-                  <div class="border p-3 mb-3" style="min-height: 100px;">
-                    <%= @product.good_info&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <h6>Детали товара (RU)</h6>
-                  <div class="border p-3 mb-3" style="min-height: 100px;">
-                    <%= @product.good_info_ru&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
-                  </div>
-                </div>
-              <% end %>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  <% end %>
 
   <% 
     # Получаем связанные продукты

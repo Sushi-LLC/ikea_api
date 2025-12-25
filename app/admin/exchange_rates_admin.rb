@@ -19,9 +19,40 @@ Trestle.resource(:exchange_rates, model: ExchangeRate) do
   end
 
   controller do
+    def index
+      super
+      @current_rates = {}
+      today = Date.today
+      margin = CalculatorSetting.get('margin_multiplier') || 1.1
+      
+      # Получаем актуальные курсы для основных валют
+      ['USD', 'EUR', 'PLN'].each do |currency|
+        rate = ExchangeRate.fetch_or_create(currency, today)
+        if rate
+          @current_rates[currency] = {
+            nbrb: rate.rate_per_unit.round(4),
+            with_margin: (rate.rate_per_unit * margin).round(4),
+            date: rate.date,
+            scale: rate.scale,
+            official_rate: rate.rate
+          }
+        end
+      end
+      
+      render "trestle/exchange_rates/index"
+    end
+    
     def sync
       date = params[:date].present? ? Date.parse(params[:date]) : Date.today
-      currencies = params[:currencies] || ['USD', 'EUR', 'PLN']
+      
+      # Обрабатываем параметр currencies (может быть массивом или строкой)
+      currencies = if params[:currencies].is_a?(Array)
+        params[:currencies]
+      elsif params[:currencies].is_a?(String)
+        params[:currencies].split
+      else
+        ['USD', 'EUR', 'PLN']
+      end
       
       synced = []
       errors = []
@@ -45,7 +76,7 @@ Trestle.resource(:exchange_rates, model: ExchangeRate) do
         flash[:error] = "Ошибки: #{errors.join(', ')}"
       end
       
-      redirect_to admin.collection_path
+      redirect_to admin.path(:index)
     end
   end
 
@@ -60,6 +91,5 @@ Trestle.resource(:exchange_rates, model: ExchangeRate) do
     number_field :official_rate, step: 0.0001
     number_field :scale
   end
-
 end
 

@@ -12,6 +12,24 @@ Trestle.resource(:price_calculator, model: PriceCalculator) do
     def show
       @calculation = nil
       @error = nil
+      @current_rates = nil
+      
+      # Получаем актуальные курсы валют на текущий день
+      today = Date.today
+      margin = CalculatorSetting.get('margin_multiplier') || 1.1
+      @current_rates = {}
+      
+      # Получаем курсы для USD, EUR, PLN
+      ['USD', 'EUR', 'PLN'].each do |currency|
+        rate = ExchangeRate.fetch_or_create(currency, today)
+        if rate
+          @current_rates[currency.downcase.to_sym] = {
+            nbrb: rate.rate_per_unit.round(4),
+            with_margin: (rate.rate_per_unit * margin).round(4),
+            date: rate.date
+          }
+        end
+      end
       
       if params[:calculate]
         begin

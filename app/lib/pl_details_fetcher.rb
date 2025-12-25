@@ -9,10 +9,22 @@ class PlDetailsFetcher
     new.fetch(url)
   end
   
+  # Парсинг готового HTML (например, полученного через scrape.do)
+  def self.parse_html(html, url = nil)
+    new.parse_html(html, url)
+  end
+  
   def fetch(url)
     full_url = url.start_with?('http') ? url : "https://www.ikea.com#{url}"
     
     html = fetch_with_proxy(full_url)
+    parse_html(html, full_url)
+  end
+  
+  def parse_html(html, url = nil)
+    return {} unless html.present?
+    
+    full_url = url || 'https://www.ikea.com/pl/pl/'
     doc = Nokogiri::HTML(html)
     
     result = {}

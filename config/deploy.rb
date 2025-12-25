@@ -8,7 +8,7 @@ set :repo_url, "git@github.com:dmitryS1666/ikea_api.git"
 set :branch, :main
 
 # Deploy directory
-set :deploy_to, "/var/www/ikea_api"
+set :deploy_to, "/home/deploy/apps/ikea_back"
 
 # Keep last 5 releases
 set :keep_releases, 5

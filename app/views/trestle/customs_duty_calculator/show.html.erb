@@ -1,0 +1,372 @@
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-md-5">
+      <div class="card">
+        <div class="card-header">
+          <h3>Калькулятор таможенной пошлины</h3>
+          <p class="text-muted mb-0">Расчет таможенных платежей для физических лиц</p>
+        </div>
+        <div class="card-body">
+          <%= form_tag admin.instance_path(CustomsDutyCalculator.new(id: 'show')), method: :get, data: { turbo: false } do %>
+            <div class="form-group mb-3">
+              <%= label_tag :cost_eur, "Стоимость товара (EUR)", class: "form-label" %>
+              <%= number_field_tag :cost_eur, params[:cost_eur], 
+                  class: "form-control", step: 0.01, min: 0, required: true, placeholder: "0.00" %>
+              <small class="form-text text-muted">
+                Стоимость товара в евро (C)
+              </small>
+            </div>
+            
+            <div class="form-group mb-3">
+              <%= label_tag :weight_kg, "Вес товара (кг)", class: "form-label" %>
+              <%= number_field_tag :weight_kg, params[:weight_kg], 
+                  class: "form-control", step: 0.01, min: 0, required: true, placeholder: "0.00" %>
+              <small class="form-text text-muted">
+                Вес товара в килограммах (W)
+              </small>
+            </div>
+            
+            <div class="form-group mb-3">
+              <%= label_tag :date, "Дата курса валют", class: "form-label" %>
+              <%= date_field_tag :date, params[:date] || Date.today, class: "form-control" %>
+              <small class="form-text text-muted">
+                Дата для получения курса EUR/BYN от НБ РБ
+              </small>
+            </div>
+            
+            <%= hidden_field_tag :calculate, '1' %>
+            <%= submit_tag "Рассчитать", class: "btn btn-primary btn-lg w-100" %>
+          <% end %>
+        </div>
+      </div>
+      
+      <!-- Справка по нормам и ставкам -->
+      <div class="card mt-4">
+        <div class="card-header">
+          <h5>Нормы и ставки</h5>
+        </div>
+        <div class="card-body">
+          <table class="table table-sm table-bordered">
+            <thead>
+              <tr>
+                <th>Описание</th>
+                <th>Норма</th>
+                <th>Ставка при превышении</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Стоимость (C)</strong></td>
+                <td>200 €</td>
+                <td>15% от суммы превышения</td>
+              </tr>
+              <tr>
+                <td><strong>Вес (W)</strong></td>
+                <td>31 кг</td>
+                <td>2 €/кг за каждый кг превышения</td>
+              </tr>
+              <tr>
+                <td><strong>Таможенный сбор</strong></td>
+                <td colspan="2">10 BYN (при превышении лимитов)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-7">
+      <% if @error %>
+        <div class="alert alert-danger">
+          <strong>Ошибка:</strong> <%= @error %>
+        </div>
+      <% end %>
+      
+      <% if @calculation %>
+        <div class="card">
+          <div class="card-header bg-primary text-white">
+            <h3 class="mb-0">Результат расчета</h3>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-info mb-4">
+              <h4 class="alert-heading">Итоговая таможенная пошлина:</h4>
+              <h2 class="mb-0 text-primary">
+                <strong><%= number_to_currency(@calculation[:total_byn], unit: 'BYN', format: '%n %u', precision: 2) %></strong>
+              </h2>
+            </div>
+            
+            <h5>Входные данные:</h5>
+            <table class="table table-sm table-bordered mb-4">
+              <tr>
+                <td><strong>Стоимость товара (C):</strong></td>
+                <td class="text-right"><%= number_to_currency(@calculation[:cost_eur], unit: 'EUR', format: '%n %u', precision: 2) %></td>
+              </tr>
+              <tr>
+                <td><strong>Вес товара (W):</strong></td>
+                <td class="text-right"><%= @calculation[:weight_kg] %> кг</td>
+              </tr>
+              <tr>
+                <td><strong>Курс EUR/BYN (E):</strong></td>
+                <td class="text-right"><%= number_with_precision(@calculation[:eur_rate], precision: 4) %> BYN/€</td>
+              </tr>
+              <tr>
+                <td><strong>Дата курса:</strong></td>
+                <td class="text-right"><%= @calculation[:date].strftime('%d.%m.%Y') %></td>
+              </tr>
+            </table>
+            
+            <h5>Лимиты:</h5>
+            <table class="table table-sm table-bordered mb-4">
+              <tr>
+                <td>Норма беспошлинного ввоза по стоимости:</td>
+                <td class="text-right"><strong><%= number_to_currency(@calculation[:free_cost_limit], unit: 'EUR', format: '%n %u', precision: 0) %></strong></td>
+              </tr>
+              <tr>
+                <td>Норма беспошлинного ввоза по весу:</td>
+                <td class="text-right"><strong><%= @calculation[:free_weight_limit] %> кг</strong></td>
+              </tr>
+            </table>
+            
+            <% scenario = @calculation[:details][:scenario] %>
+            <% if scenario == 4 %>
+              <!-- Сценарий 4: В пределах нормы -->
+              <div class="alert alert-success">
+                <h5 class="alert-heading">Сценарий 4: В пределах нормы (Без пошлины)</h5>
+                <p class="mb-0">
+                  <strong>Условие:</strong> C ≤ <%= @calculation[:free_cost_limit] %> € И W ≤ <%= @calculation[:free_weight_limit] %> кг<br>
+                  <strong>Результат:</strong> Таможенная пошлина не взимается.
+                </p>
+              </div>
+            <% else %>
+              <h5>Детали расчета:</h5>
+              
+              <% if scenario == 1 %>
+                <!-- Сценарий 1: Превышение только стоимостного лимита -->
+                <div class="alert alert-warning mb-3">
+                  <h5 class="alert-heading">Сценарий 1: Превышение только стоимостного лимита</h5>
+                  <p class="mb-2">
+                    <strong>Условие:</strong> Стоимость C > <%= @calculation[:free_cost_limit] %> € И Вес W ≤ <%= @calculation[:free_weight_limit] %> кг
+                  </p>
+                  <p class="mb-0">
+                    <strong>Расчет:</strong> Пошлина = 15% от суммы превышения стоимости
+                  </p>
+                </div>
+                
+                <table class="table table-sm table-bordered">
+                  <tr>
+                    <td>Превышение стоимости:</td>
+                    <td class="text-right">
+                      <%= number_to_currency(@calculation[:cost_eur], unit: 'EUR', format: '%n %u', precision: 2) %> - 
+                      <%= number_to_currency(@calculation[:free_cost_limit], unit: 'EUR', format: '%n %u', precision: 0) %> = 
+                      <strong><%= number_to_currency(@calculation[:details][:cost_excess], unit: 'EUR', format: '%n %u', precision: 2) %></strong>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Пошлина (EUR):</td>
+                    <td class="text-right">
+                      <%= number_to_currency(@calculation[:details][:cost_excess], unit: 'EUR', format: '%n %u', precision: 2) %> × 
+                      <%= (@calculation[:cost_duty_rate] * 100).to_i %>% = 
+                      <strong><%= number_to_currency(@calculation[:duty_eur], unit: 'EUR', format: '%n %u', precision: 2) %></strong>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Пошлина (BYN):</td>
+                    <td class="text-right">
+                      <%= number_to_currency(@calculation[:duty_eur], unit: 'EUR', format: '%n %u', precision: 2) %> × 
+                      <%= number_with_precision(@calculation[:eur_rate], precision: 4) %> = 
+                      <strong><%= number_to_currency(@calculation[:duty_byn], unit: 'BYN', format: '%n %u', precision: 2) %></strong>
+                    </td>
+                  </tr>
+                </table>
+                
+              <% elsif scenario == 2 %>
+                <!-- Сценарий 2: Превышение только весового лимита -->
+                <div class="alert alert-warning mb-3">
+                  <h5 class="alert-heading">Сценарий 2: Превышение только весового лимита</h5>
+                  <p class="mb-2">
+                    <strong>Условие:</strong> Стоимость C ≤ <%= @calculation[:free_cost_limit] %> € И Вес W > <%= @calculation[:free_weight_limit] %> кг
+                  </p>
+                  <p class="mb-0">
+                    <strong>Расчет:</strong> Пошлина = 2 € за каждый килограмм превышения веса
+                  </p>
+                </div>
+                
+                <table class="table table-sm table-bordered">
+                  <tr>
+                    <td>Превышение веса:</td>
+                    <td class="text-right">
+                      <%= @calculation[:weight_kg] %> кг - <%= @calculation[:free_weight_limit] %> кг = 
+                      <strong><%= @calculation[:details][:weight_excess].round(2) %> кг</strong>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Пошлина (EUR):</td>
+                    <td class="text-right">
+                      <%= @calculation[:details][:weight_excess].round(2) %> кг × 
+                      <%= number_to_currency(@calculation[:weight_duty_rate], unit: 'EUR', format: '%n %u', precision: 0) %>/кг = 
+                      <strong><%= number_to_currency(@calculation[:duty_eur], unit: 'EUR', format: '%n %u', precision: 2) %></strong>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Пошлина (BYN):</td>
+                    <td class="text-right">
+                      <%= number_to_currency(@calculation[:duty_eur], unit: 'EUR', format: '%n %u', precision: 2) %> × 
+                      <%= number_with_precision(@calculation[:eur_rate], precision: 4) %> = 
+                      <strong><%= number_to_currency(@calculation[:duty_byn], unit: 'BYN', format: '%n %u', precision: 2) %></strong>
+                    </td>
+                  </tr>
+                </table>
+                
+              <% elsif scenario == 3 %>
+                <!-- Сценарий 3: Двойное превышение -->
+                <div class="alert alert-danger mb-3">
+                  <h5 class="alert-heading">Сценарий 3: Двойное превышение</h5>
+                  <p class="mb-2">
+                    <strong>Условие:</strong> Стоимость C > <%= @calculation[:free_cost_limit] %> € И Вес W > <%= @calculation[:free_weight_limit] %> кг
+                  </p>
+                  <p class="mb-0">
+                    <strong>Расчет:</strong> Применяется максимальная пошлина (по стоимости или по весу)
+                  </p>
+                </div>
+                
+                <table class="table table-sm table-bordered mb-3">
+                  <tr>
+                    <td>Превышение стоимости:</td>
+                    <td class="text-right">
+                      <%= number_to_currency(@calculation[:cost_eur], unit: 'EUR', format: '%n %u', precision: 2) %> - 
+                      <%= number_to_currency(@calculation[:free_cost_limit], unit: 'EUR', format: '%n %u', precision: 0) %> = 
+                      <strong><%= number_to_currency(@calculation[:details][:cost_excess], unit: 'EUR', format: '%n %u', precision: 2) %></strong>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>Превышение веса:</td>
+                    <td class="text-right">
+                      <%= @calculation[:weight_kg] %> кг - <%= @calculation[:free_weight_limit] %> кг = 
+                      <strong><%= @calculation[:details][:weight_excess].round(2) %> кг</strong>
+                    </td>
+                  </tr>
+                </table>
+                
+                <h6>Расчет пошлины по стоимости:</h6>
+                <table class="table table-sm table-bordered mb-3">
+                  <tr>
+                    <td>Пошлина по стоимости (EUR):</td>
+                    <td class="text-right">
+                      <%= number_to_currency(@calculation[:details][:cost_excess], unit: 'EUR', format: '%n %u', precision: 2) %> × 
+                      <%= (@calculation[:cost_duty_rate] * 100).to_i %>% = 
+                      <strong><%= number_to_currency(@calculation[:details][:duty_by_cost_eur], unit: 'EUR', format: '%n %u', precision: 2) %></strong>
+                    </td>
+                  </tr>
+                </table>
+                
+                <h6>Расчет пошлины по весу:</h6>
+                <table class="table table-sm table-bordered mb-3">
+                  <tr>
+                    <td>Пошлина по весу (EUR):</td>
+                    <td class="text-right">
+                      <%= @calculation[:details][:weight_excess].round(2) %> кг × 
+                      <%= number_to_currency(@calculation[:weight_duty_rate], unit: 'EUR', format: '%n %u', precision: 0) %>/кг = 
+                      <strong><%= number_to_currency(@calculation[:details][:duty_by_weight_eur], unit: 'EUR', format: '%n %u', precision: 2) %></strong>
+                    </td>
+                  </tr>
+                </table>
+                
+                <div class="alert alert-info mb-3">
+                  <strong>Применена пошлина:</strong> 
+                  <%= @calculation[:details][:max_duty_used] == 'cost' ? 'По стоимости' : 'По весу' %> 
+                  (максимальная: <%= number_to_currency(@calculation[:duty_eur], unit: 'EUR', format: '%n %u', precision: 2) %>)
+                </div>
+                
+                <table class="table table-sm table-bordered">
+                  <tr>
+                    <td>Пошлина (BYN):</td>
+                    <td class="text-right">
+                      <%= number_to_currency(@calculation[:duty_eur], unit: 'EUR', format: '%n %u', precision: 2) %> × 
+                      <%= number_with_precision(@calculation[:eur_rate], precision: 4) %> = 
+                      <strong><%= number_to_currency(@calculation[:duty_byn], unit: 'BYN', format: '%n %u', precision: 2) %></strong>
+                    </td>
+                  </tr>
+                </table>
+              <% end %>
+              
+              <!-- Таможенный сбор -->
+              <% if @calculation[:fee_byn] > 0 %>
+                <div class="mt-3">
+                  <h6>Таможенный сбор:</h6>
+                  <table class="table table-sm table-bordered">
+                    <tr>
+                      <td>Таможенный сбор (BYN):</td>
+                      <td class="text-right">
+                        <strong><%= number_to_currency(@calculation[:fee_byn], unit: 'BYN', format: '%n %u', precision: 2) %></strong>
+                        <small class="text-muted d-block">Взимается при превышении лимитов</small>
+                      </td>
+                    </tr>
+                  </table>
+                </div>
+              <% end %>
+              
+              <!-- Итоговая сумма -->
+              <div class="alert alert-success mt-4">
+                <h5 class="mb-2">Итого к оплате:</h5>
+                <table class="table table-sm mb-0">
+                  <tr>
+                    <td>Таможенная пошлина (BYN):</td>
+                    <td class="text-right"><%= number_to_currency(@calculation[:duty_byn], unit: 'BYN', format: '%n %u', precision: 2) %></td>
+                  </tr>
+                  <% if @calculation[:fee_byn] > 0 %>
+                    <tr>
+                      <td>Таможенный сбор (BYN):</td>
+                      <td class="text-right"><%= number_to_currency(@calculation[:fee_byn], unit: 'BYN', format: '%n %u', precision: 2) %></td>
+                    </tr>
+                  <% end %>
+                  <tr class="table-primary">
+                    <td><strong>ВСЕГО (BYN):</strong></td>
+                    <td class="text-right"><strong><%= number_to_currency(@calculation[:total_byn], unit: 'BYN', format: '%n %u', precision: 2) %></strong></td>
+                  </tr>
+                </table>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+      
+      <!-- Примеры расчетов -->
+      <div class="card mt-4">
+        <div class="card-header">
+          <h5>Примеры расчетов</h5>
+        </div>
+        <div class="card-body">
+          <div class="mb-3">
+            <strong>Пример 1 (Сценарий 1):</strong> Кресло, Цена C=350 €, Вес W=15 кг<br>
+            <small class="text-muted">
+              Превышение стоимости: 350 € - 200 € = 150 €<br>
+              Расчет: 150 × 0.15 × 3.5 = 78.75 BYN
+            </small>
+          </div>
+          <div class="mb-3">
+            <strong>Пример 2 (Сценарий 2):</strong> Набор посуды, Цена C=150 €, Вес W=41 кг<br>
+            <small class="text-muted">
+              Превышение веса: 41 кг - 31 кг = 10 кг<br>
+              Расчет: 10 × 2 × 3.5 = 70 BYN
+            </small>
+          </div>
+          <div class="mb-3">
+            <strong>Пример 3 (Сценарий 3):</strong> Стеллаж, Цена C=450 €, Вес W=51 кг<br>
+            <small class="text-muted">
+              По стоимости: (450 - 200) × 0.15 = 37.5 €<br>
+              По весу: (51 - 31) × 2 = 40 €<br>
+              Применена пошлина по весу (максимальная): 40 € × 3.5 = 140 BYN
+            </small>
+          </div>
+          <div>
+            <strong>Пример 4 (Сценарий 4):</strong> Небольшой столик, Цена C=190 €, Вес W=25 кг<br>
+            <small class="text-muted">
+              В пределах нормы: пошлина = 0 BYN
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

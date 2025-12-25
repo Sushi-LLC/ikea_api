@@ -1,10 +1,120 @@
-<% content_for :toolbar do %>
-  <div class="btn-toolbar">
-    <%= form_tag admin.path(:sync), method: :post, data: { turbo: false }, class: "form-inline" do %>
-      <%= date_field_tag :date, Date.today, class: "form-control mr-2" %>
-      <%= submit_tag "Синхронизировать курсы из API НБ РБ", class: "btn btn-primary", 
-          data: { confirm: "Обновить курсы валют из API НБ РБ?" } %>
-    <% end %>
+<div class="container-fluid">
+  <!-- Блок с актуальными курсами валют -->
+  <% if @current_rates.present? %>
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header bg-info text-white">
+            <div class="d-flex justify-content-between align-items-center">
+              <h4 class="mb-0">📊 Актуальные курсы валют на <%= Date.today.strftime('%d.%m.%Y') %></h4>
+              <%= form_tag admin.path(:sync), method: :post, class: "d-inline" do %>
+                <%= hidden_field_tag :date, Date.today %>
+                <%= hidden_field_tag 'currencies[]', 'USD' %>
+                <%= hidden_field_tag 'currencies[]', 'EUR' %>
+                <%= hidden_field_tag 'currencies[]', 'PLN' %>
+                <%= submit_tag "🔄 Обновить курсы", class: "btn btn-sm btn-light" %>
+              <% end %>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <% ['USD', 'EUR', 'PLN'].each do |currency| %>
+                <% if @current_rates[currency] %>
+                  <% rate = @current_rates[currency] %>
+                  <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                      <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                          <% case currency %>
+                          <% when 'USD' %>
+                            💵 Доллар США (USD)
+                          <% when 'EUR' %>
+                            💶 Евро (EUR)
+                          <% when 'PLN' %>
+                            💰 Польский злотый (PLN)
+                          <% end %>
+                        </h5>
+                      </div>
+                      <div class="card-body">
+                        <table class="table table-sm table-bordered mb-0">
+                          <tr>
+                            <td><strong>Курс НБ РБ:</strong></td>
+                            <td class="text-right">
+                              <strong><%= number_with_precision(rate[:nbrb], precision: 4) %> BYN</strong>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Официальный курс:</td>
+                            <td class="text-right">
+                              <%= number_with_precision(rate[:official_rate], precision: 4) %> BYN
+                              <small class="text-muted">(за <%= rate[:scale] %> ед.)</small>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td><strong>Курс с маржой 10%:</strong></td>
+                            <td class="text-right">
+                              <strong class="text-success"><%= number_with_precision(rate[:with_margin], precision: 4) %> BYN</strong>
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Дата курса:</td>
+                            <td class="text-right">
+                              <%= rate[:date].strftime('%d.%m.%Y') %>
+                            </td>
+                          </tr>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                <% end %>
+              <% end %>
+            </div>
+            <div class="alert alert-info mt-3 mb-0">
+              <small>
+                <strong>Примечание:</strong> Курсы обновляются раз в сутки из API НБ РБ. 
+                Для обновления нажмите кнопку "Обновить курсы" выше.
+              </small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% end %>
+  
+  <!-- Таблица с историей курсов -->
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5>История курсов валют</h5>
+        </div>
+        <div class="card-body">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Валюта</th>
+                <th>Курс</th>
+                <th>Масштаб</th>
+                <th>Курс за 1 ед.</th>
+                <th>Создано</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% admin.collection.each do |rate| %>
+                <tr>
+                  <td><%= rate.date.strftime('%d.%m.%Y') %></td>
+                  <td><%= rate.currency_code %></td>
+                  <td><%= number_with_precision(rate.rate, precision: 4) %></td>
+                  <td><%= rate.scale %></td>
+                  <td><%= number_with_precision(rate.rate_per_unit, precision: 4) %></td>
+                  <td><%= rate.created_at.strftime('%d.%m.%Y %H:%M') %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   </div>
-<% end %>
-
+</div>

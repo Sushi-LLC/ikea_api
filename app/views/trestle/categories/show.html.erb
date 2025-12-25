@@ -46,14 +46,6 @@
               </td>
             </tr>
             <tr>
-              <th>Важная:</th>
-              <td>
-                <span class="badge <%= @category.is_important? ? 'badge-success' : 'badge-secondary' %>">
-                  <%= @category.is_important? ? 'Да' : 'Нет' %>
-                </span>
-              </td>
-            </tr>
-            <tr>
               <th>Статус:</th>
               <td>
                 <span class="badge <%= @category.is_deleted? ? 'badge-danger' : 'badge-success' %>">

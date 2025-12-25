@@ -9,12 +9,12 @@ class NbrbApiService
   def self.get_rate(currency_code, date = nil)
     date ||= Date.today
     
-    # Коды валют в API НБ РБ
+    # Коды валют в API НБ РБ (актуальные ID на 2025 год)
     currency_ids = {
-      'USD' => 145,
-      'EUR' => 292,
-      'PLN' => 293,
-      'RUB' => 298
+      'USD' => 431,
+      'EUR' => 451,
+      'PLN' => 452,
+      'RUB' => 456
     }
     
     currency_id = currency_ids[currency_code.upcase]

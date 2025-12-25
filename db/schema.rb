@@ -10,9 +10,19 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2025_12_21_181900) do
+ActiveRecord::Schema[7.1].define(version: 2025_12_23_215130) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
+
+  create_table "calculator_settings", force: :cascade do |t|
+    t.string "key", null: false
+    t.text "value", null: false
+    t.string "setting_type", null: false
+    t.text "description"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["key"], name: "index_calculator_settings_on_key", unique: true
+  end
 
   create_table "categories", force: :cascade do |t|
     t.string "ikea_id"
@@ -56,6 +66,18 @@ ActiveRecord::Schema[7.1].define(version: 2025_12_21_181900) do
     t.datetime "updated_at", null: false
   end
 
+  create_table "exchange_rates", force: :cascade do |t|
+    t.date "date", null: false
+    t.string "currency_code", null: false
+    t.decimal "rate", precision: 10, scale: 4, null: false
+    t.decimal "official_rate", precision: 10, scale: 4
+    t.integer "scale", default: 1
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["currency_code"], name: "index_exchange_rates_on_currency_code"
+    t.index ["date", "currency_code"], name: "index_exchange_rates_on_date_and_currency_code", unique: true
+  end
+
   create_table "filter_values", force: :cascade do |t|
     t.bigint "filter_id", null: false
     t.string "value_id"
@@ -90,7 +112,9 @@ ActiveRecord::Schema[7.1].define(version: 2025_12_21_181900) do
     t.text "error_message"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "job_id"
     t.index ["created_at"], name: "index_parser_tasks_on_created_at"
+    t.index ["job_id"], name: "index_parser_tasks_on_job_id"
     t.index ["status"], name: "index_parser_tasks_on_status"
     t.index ["task_type", "status"], name: "index_parser_tasks_on_task_type_and_status"
     t.index ["task_type"], name: "index_parser_tasks_on_task_type"
@@ -149,6 +173,23 @@ ActiveRecord::Schema[7.1].define(version: 2025_12_21_181900) do
     t.string "delivery_reason"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.text "materials"
+    t.text "features"
+    t.text "care_instructions"
+    t.text "environmental_info"
+    t.text "short_description"
+    t.string "designer"
+    t.text "safety_info"
+    t.text "good_to_know"
+    t.text "assembly_documents"
+    t.text "materials_ru"
+    t.text "features_ru"
+    t.text "care_instructions_ru"
+    t.text "environmental_info_ru"
+    t.text "short_description_ru"
+    t.string "designer_ru"
+    t.text "safety_info_ru"
+    t.text "good_to_know_ru"
     t.index ["category_id"], name: "index_products_on_category_id"
     t.index ["is_bestseller"], name: "index_products_on_is_bestseller"
     t.index ["is_popular"], name: "index_products_on_is_popular"

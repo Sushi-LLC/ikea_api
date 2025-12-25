@@ -1,0 +1,9 @@
+# Конфигурация Sidekiq для обработки очередей
+# Использование: bundle exec sidekiq -C config/sidekiq.yml
+
+:queues:
+  - parser
+  - default
+
+:concurrency: 5
+

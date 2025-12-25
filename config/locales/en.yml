@@ -29,3 +29,10 @@
 
 en:
   hello: "Hello world"
+  admin:
+    navigation:
+      groups:
+        Catalog: "Каталог"
+        Parser: "Парсер"
+        Finance: "Финансы"
+        Settings: "Настройки"

@@ -22,6 +22,8 @@ class Product < ApplicationRecord
   serialize :local_images, coder: JSON
   serialize :videos, coder: JSON
   serialize :manuals, coder: JSON
+  serialize :features, coder: JSON
+  serialize :assembly_documents, coder: JSON
   
   # Callbacks
   before_save :calculate_delivery, if: :weight_changed?

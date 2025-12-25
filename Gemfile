@@ -42,6 +42,9 @@ gem "httparty", "~> 0.21"
 # HTML парсинг для детальных страниц продуктов
 gem "nokogiri", "~> 1.15"
 
+# Headless браузер для загрузки динамического контента
+gem "ferrum", "~> 0.15"
+
 # Telegram уведомления
 gem "telegram-bot"
 
@@ -64,6 +67,8 @@ group :development, :test do
   gem "rspec-rails"
   gem "factory_bot_rails"
   gem "shoulda-matchers", "~> 6.0"
+  # Загрузка переменных окружения из .env файла
+  gem "dotenv-rails"
 end
 
 group :development do

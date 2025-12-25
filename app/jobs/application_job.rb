@@ -19,6 +19,19 @@ class ApplicationJob < ActiveJob::Base
     )
   end
   
+  # Проверить, остановлена ли задача
+  def task_stopped?(task)
+    task.reload.status == 'failed' && task.error_message&.include?('Остановлено вручную')
+  end
+  
+  # Выбросить исключение, если задача остановлена
+  def check_task_not_stopped!(task)
+    if task_stopped?(task)
+      Rails.logger.info "Task #{task.id} was stopped, aborting job execution"
+      raise StandardError.new('Task was stopped manually')
+    end
+  end
+  
   def notify_started(task_type, limit: nil)
     TelegramService.send_parser_started(task_type, limit: limit)
   end

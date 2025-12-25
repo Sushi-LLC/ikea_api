@@ -33,17 +33,46 @@ class LtDetailsFetcher
     name = product_doc.css('h1 .itemFacts').text.strip
     result[:name] = clean_product_name(name) if name.present?
     
-    # Материалы
-    material_text = product_doc.css('#materials-details').inner_html
-    result[:material_text] = material_text if material_text.present?
+    # Материалы - извлекаем HTML и текст
+    materials_elem = product_doc.css('#materials-details').first
+    if materials_elem
+      material_html = materials_elem.inner_html
+      material_text = materials_elem.text.strip
+      result[:material_text] = material_html if material_html.present?
+      result[:materials] = material_text if material_text.present?
+      Rails.logger.debug "LtDetailsFetcher: Found materials: #{material_text.length} chars"
+    end
     
-    # Детали товара
-    good_text = product_doc.css('#good-details').inner_html
-    result[:good_text] = good_text if good_text.present?
+    # "Полезно знать" (good-details) - извлекаем HTML и текст
+    good_elem = product_doc.css('#good-details').first
+    if good_elem
+      good_html = good_elem.inner_html
+      good_text = good_elem.text.strip
+      result[:good_text] = good_html if good_html.present?
+      result[:good_to_know] = good_text if good_text.present?
+      Rails.logger.debug "LtDetailsFetcher: Found good-to-know: #{good_text.length} chars"
+    end
     
-    # Описание
-    details_text = product_doc.css('.product-details-content').inner_html
-    result[:details_text] = details_text if details_text.present?
+    # Описание (product-details-content) - извлекаем HTML и текст
+    details_elem = product_doc.css('.product-details-content').first
+    if details_elem
+      details_html = details_elem.inner_html
+      details_text = details_elem.text.strip
+      result[:details_text] = details_html if details_html.present?
+      result[:content] = details_text if details_text.present?
+      Rails.logger.debug "LtDetailsFetcher: Found details: #{details_text.length} chars"
+    end
+    
+    # Дополнительно ищем материалы в других местах (на случай изменения структуры)
+    if result[:materials].blank?
+      # Пробуем альтернативные селекторы
+      alt_materials = product_doc.css('[id*="material"], [class*="material"]').first
+      if alt_materials
+        result[:materials] = alt_materials.text.strip
+        result[:material_text] = alt_materials.inner_html
+        Rails.logger.debug "LtDetailsFetcher: Found materials via alternative selector"
+      end
+    end
     
     result
   end

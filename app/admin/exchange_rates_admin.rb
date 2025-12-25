@@ -1,7 +1,7 @@
 # Админ-панель для управления курсами валют
 Trestle.resource(:exchange_rates, model: ExchangeRate) do
   menu do
-    item :exchange_rates, icon: "fa fa-dollar-sign", priority: 4, label: "Курсы валют", group: "Финансы"
+    item :exchange_rates, icon: "fa fa-dollar-sign", priority: 4, label: "Курсы валют", group: "Finance"
   end
 
   table do

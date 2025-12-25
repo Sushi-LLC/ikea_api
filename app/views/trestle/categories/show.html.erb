@@ -71,7 +71,15 @@
                 <td>
                   <% parent_ids = @category.parent_ids.is_a?(Array) ? @category.parent_ids : (JSON.parse(@category.parent_ids) rescue []) %>
                   <% if parent_ids.any? %>
-                    <%= parent_ids.join(', ') %>
+                    <% parent_links = parent_ids.map do |parent_id|
+                         parent_category = Category.find_by(ikea_id: parent_id)
+                         if parent_category
+                           link_to("#{parent_category.name} (#{parent_id})", admin.instance_path(parent_category), class: 'btn btn-sm btn-link p-0 text-left')
+                         else
+                           content_tag(:span, parent_id, class: 'text-muted')
+                         end
+                       end %>
+                    <%= safe_join(parent_links, tag.br) %>
                   <% else %>
                     <em class="text-muted">Нет</em>
                   <% end %>
@@ -160,7 +168,7 @@
                     <td><%= product.sku %></td>
                     <td><%= product.name %></td>
                     <td><%= product.name_ru || content_tag(:em, "Нет", class: "text-muted") %></td>
-                    <td><%= product.price ? number_to_currency(product.price, unit: 'BYN', format: '%n %u') : '-' %></td>
+                    <td><%= product.price ? number_to_currency(product.price, unit: 'Zl', format: '%n %u') : '-' %></td>
                     <td>
                       <%= link_to 'Просмотр', admin.instance_path(product), class: 'btn btn-sm btn-primary' %>
                     </td>

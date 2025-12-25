@@ -1,6 +1,6 @@
 Trestle.resource(:products, model: Product) do
   menu do
-    item :products, icon: "fa fa-cube", priority: 3
+    item :products, icon: "fa fa-cube", priority: 2, label: "Продукты", group: "Catalog"
   end
 
   scopes do
@@ -17,7 +17,7 @@ Trestle.resource(:products, model: Product) do
       product.category&.name || 'Без категории'
     end
     column :price do |product|
-      number_to_currency(product.price, unit: 'BYN', format: '%n %u')
+      number_to_currency(product.price, unit: 'Zl', format: '%n %u')
     end
     column :quantity
     column :is_bestseller do |product|

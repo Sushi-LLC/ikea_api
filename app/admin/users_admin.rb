@@ -1,6 +1,6 @@
 Trestle.resource(:users, model: User) do
   menu do
-    item :users, icon: "fa fa-users", priority: 5
+    item :users, icon: "fa fa-users", priority: 5, label: "Пользователи", group: "Settings"
   end
 
   table do

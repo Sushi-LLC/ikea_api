@@ -1,7 +1,7 @@
 # Админ-панель для управления настройками калькулятора
 Trestle.resource(:calculator_settings, model: CalculatorSetting) do
   menu do
-    item :calculator_settings, icon: "fa fa-cog", priority: 6, label: "Настройки калькулятора", group: "Финансы"
+    item :calculator_settings, icon: "fa fa-cog", priority: 6, label: "Настройки калькулятора", group: "Finance"
   end
 
   table do

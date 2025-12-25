@@ -19,6 +19,11 @@ require "sprockets/railtie"
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
+# Загружаем переменные окружения из .env файла (только в development и test)
+if defined?(Dotenv)
+  Dotenv.load
+end
+
 module IkeaApi
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.

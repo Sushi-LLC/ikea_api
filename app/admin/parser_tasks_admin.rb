@@ -1,23 +1,37 @@
 # Админ-панель для управления задачами парсинга
 Trestle.resource :parser_tasks, model: ParserTask do
   menu do
-    item :parser_tasks, icon: "fa fa-tasks", label: "Задачи парсинга"
+    item :parser_tasks, icon: "fa fa-tasks", priority: 3, label: "Задачи парсинга", group: "Parser"
   end
 
   # Таблица
   table do
     column :id
     column :task_type, header: "Тип задачи" do |task|
-      task_type_label(task.task_type)
+      {
+        'categories' => 'Категории',
+        'products' => 'Продукты',
+        'bestsellers' => 'Хиты продаж',
+        'popular_categories' => 'Популярные категории',
+        'category_images' => 'Картинки категорий',
+        'product_images' => 'Картинки продуктов'
+      }[task.task_type] || task.task_type
     end
     column :status, header: "Статус" do |task|
-      status_badge(task.status)
+      color = {
+        'pending' => 'secondary',
+        'running' => 'primary',
+        'completed' => 'success',
+        'failed' => 'danger'
+      }[task.status] || 'secondary'
+      
+      content_tag(:span, task.status, class: "badge badge-#{color}")
     end
     column :limit, header: "Лимит"
     column :processed, header: "Обработано"
     column :created, header: "Создано"
     column :updated, header: "Обновлено"
-    column :errors, header: "Ошибок"
+    column :error_count, header: "Ошибок"
     column :started_at, header: "Начало"
     column :completed_at, header: "Завершено"
     column :created_at, header: "Создано", align: :center
@@ -34,7 +48,7 @@ Trestle.resource :parser_tasks, model: ParserTask do
     row do
       col(sm: 4) { number_field :limit }
       col(sm: 4) { number_field :processed }
-      col(sm: 4) { number_field :errors }
+      col(sm: 4) { number_field :error_count }
     end
     
     row do
@@ -99,29 +113,6 @@ Trestle.resource :parser_tasks, model: ParserTask do
 
   routes do
     post :stop, on: :member
-  end
-
-  # Вспомогательные методы
-  def task_type_label(type)
-    {
-      'categories' => 'Категории',
-      'products' => 'Продукты',
-      'bestsellers' => 'Хиты продаж',
-      'popular_categories' => 'Популярные категории',
-      'category_images' => 'Картинки категорий',
-      'product_images' => 'Картинки продуктов'
-    }[type] || type
-  end
-
-  def status_badge(status)
-    color = {
-      'pending' => 'secondary',
-      'running' => 'primary',
-      'completed' => 'success',
-      'failed' => 'danger'
-    }[status] || 'secondary'
-    
-    content_tag(:span, status, class: "badge badge-#{color}")
   end
 end
 

@@ -26,28 +26,56 @@ class ProxyRotator
     # Выполнить запрос с ретраями через разные прокси
     def with_proxy_retry(&block)
       list = proxy_list
-      return yield(nil) if list.empty?
+      
+      # Если прокси нет, пробуем без прокси
+      if list.empty?
+        Rails.logger.warn "ProxyRotator: PROXY_LIST is empty, trying without proxy"
+        begin
+          return yield(nil)
+        rescue => e
+          Rails.logger.error "ProxyRotator: Request without proxy failed: #{e.message}"
+          raise StandardError.new("Request failed and no proxies configured: #{e.message}")
+        end
+      end
       
       last_error = nil
       proxy_index = @current_index
       
+      # Пробуем каждый прокси
       list.length.times do |attempt|
         proxy = list[proxy_index]
+        Rails.logger.info "ProxyRotator: Attempt #{attempt + 1}/#{list.length} with proxy: #{proxy.split('@').last rescue proxy}"
         
         begin
-          return yield(parse_proxy(proxy))
+          result = yield(parse_proxy(proxy))
+          # Успех - обновляем индекс для следующего запроса
+          @mutex.synchronize do
+            @current_index = (proxy_index + 1) % list.length
+          end
+          return result
         rescue => e
           last_error = e
+          error_msg = e.message.to_s
           
-          # Если 403 ошибка и есть еще прокси - пробуем следующий
-          if (e.message.include?('403') || 
-              (e.respond_to?(:response) && e.response&.code == 403)) && 
-             attempt < list.length - 1
+          Rails.logger.warn "ProxyRotator: Proxy #{proxy_index + 1} failed: #{error_msg[0..200]}"
+          
+          # Если 403 ошибка или Cloudflare блокировка и есть еще прокси - пробуем следующий
+          is_blocked = error_msg.include?('403') || 
+                       error_msg.include?('Cloudflare') ||
+                       error_msg.include?('Forbidden')
+          
+          if is_blocked && attempt < list.length - 1
             proxy_index = (proxy_index + 1) % list.length
+            # Небольшая задержка перед следующей попыткой
+            sleep(0.5)
             next
           end
           
-          raise e if attempt == list.length - 1
+          # Если это последняя попытка или не 403 - пробрасываем ошибку
+          if attempt == list.length - 1
+            Rails.logger.error "ProxyRotator: All proxies failed. Last error: #{error_msg}"
+            raise StandardError.new("All proxies failed. Last error: #{error_msg}")
+          end
         end
       end
       

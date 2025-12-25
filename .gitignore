@@ -36,3 +36,4 @@
 
 # Kamal secrets
 .kamal/secrets
+.env

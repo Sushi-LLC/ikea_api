@@ -2,8 +2,13 @@
 class DownloadProductImagesJob < ApplicationJob
   queue_as :parser
 
-  def perform(limit: nil, product_id: nil, images_limit: nil)
-    task = create_parser_task('product_images', limit: limit)
+  def perform(limit: nil, product_id: nil, images_limit: nil, task_id: nil)
+    # Если task_id передан, используем существующую задачу, иначе создаем новую
+    task = task_id ? ParserTask.find(task_id) : create_parser_task('product_images', limit: limit)
+    
+    # Проверяем, не остановлена ли задача перед началом выполнения
+    check_task_not_stopped!(task)
+    
     task.mark_as_running!
     
     notify_started('product_images', limit: limit)
@@ -28,6 +33,9 @@ class DownloadProductImagesJob < ApplicationJob
       
       products.find_each do |product|
         break if limit && stats[:processed] >= limit
+        
+        # Проверяем, не остановлена ли задача
+        check_task_not_stopped!(task)
         
         # Получаем массив URL изображений
         image_urls = if product.images.is_a?(Array)
@@ -66,11 +74,27 @@ class DownloadProductImagesJob < ApplicationJob
       stats[:duration] = Time.current - start_time
       notify_completed('product_images', stats)
       
-    rescue => e
+    rescue StandardError => e
+      # Если задача была остановлена вручную - просто прерываем выполнение
+      if e.message == 'Task was stopped manually'
+        Rails.logger.info "DownloadProductImagesJob: Task #{task.id} was stopped manually, aborting"
+        return
+      end
+      
       Rails.logger.error "DownloadProductImagesJob error: #{e.message}\n#{e.backtrace.join("\n")}"
       task.mark_as_failed!(e.message)
       notify_error('product_images', e)
       raise
+    rescue => e
+      # Если задача была остановлена вручную - просто прерываем выполнение
+      if e.message == 'Task was stopped manually'
+        Rails.logger.info "DownloadProductImagesJob: Task #{task.id} was stopped manually, aborting"
+        return
+      end
+      
+      Rails.logger.error "DownloadProductImagesJob unexpected error: #{e.class} - #{e.message}\n#{e.backtrace.first(10).join("\n")}"
+      task.mark_as_failed!("Unexpected error: #{e.message}")
+      notify_error('product_images', e)
     end
   end
 end

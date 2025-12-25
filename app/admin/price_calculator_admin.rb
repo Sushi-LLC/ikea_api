@@ -1,10 +1,14 @@
 # Админ-панель для расчета цен
-Trestle.resource(:price_calculator, model: ParserControl) do
+Trestle.resource(:price_calculator, model: PriceCalculator) do
   menu do
-    item :price_calculator, icon: "fa fa-calculator", priority: 5, label: "Калькулятор цен", group: "Финансы"
+    item :price_calculator, icon: "fa fa-calculator", priority: 5, label: "Калькулятор цен", group: "Finance"
   end
 
   controller do
+    def index
+      redirect_to admin.instance_path(PriceCalculator.new(id: 'show'))
+    end
+    
     def show
       @calculation = nil
       @error = nil

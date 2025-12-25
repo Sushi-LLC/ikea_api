@@ -47,11 +47,11 @@
             </tr>
             <tr>
               <th>Цена:</th>
-              <td><%= @product.price ? number_to_currency(@product.price, unit: 'BYN', format: '%n %u') : content_tag(:em, "Нет", class: "text-muted") %></td>
+              <td><%= @product.price ? number_to_currency(@product.price, unit: 'Zl', format: '%n %u') : content_tag(:em, "Нет", class: "text-muted") %></td>
             </tr>
             <tr>
-              <th>Количество:</th>
-              <td><%= @product.quantity || 0 %></td>
+              <th>В наличии:</th>
+              <td><%= @product.quantity %></td>
             </tr>
             <tr>
               <th>Хит продаж:</th>
@@ -117,6 +117,10 @@
                 </span>
               </td>
             </tr>
+            <tr>
+              <th>Краткое описание:</th>
+              <td><%= @product.short_description&.html_safe || content_tag(:em, "Нет", class: "text-muted") %></td>
+            </tr>
           </table>
         </div>
       </div>
@@ -143,6 +147,14 @@
                             else
                               []
                             end
+            # Фильтруем пустые, nil, false и строку "false" значения
+            remote_images = Array(remote_images).compact.reject { |url| 
+              url.blank? || 
+              url == false || 
+              url == 'false' || 
+              !url.is_a?(String) ||
+              url.to_s.downcase == 'false'
+            }
 
             # Получаем local images
             local_images = if @product.local_images.is_a?(Array)
@@ -156,13 +168,24 @@
                            else
                              []
                            end
+            # Фильтруем пустые, nil, false и строку "false" значения
+            local_images = Array(local_images).compact.reject { |path| 
+              path.blank? || 
+              path == false || 
+              path == 'false' || 
+              !path.is_a?(String) ||
+              path.to_s.downcase == 'false'
+            }
           %>
 
           <% if remote_images.any? || local_images.any? %>
-            <% if remote_images.any? %>
+            <%
+=begin%>
+ <% if remote_images.any? %>
               <h6 class="mt-3">Удалённые картинки (<%= remote_images.length %>)</h6>
               <div class="row mb-4">
                 <% remote_images.each do |image_url| %>
+                  <% next unless image_url.present? && image_url.is_a?(String) && image_url != 'false' && image_url.to_s.downcase != 'false' %>
                   <div class="col-sm-3 col-md-2 mb-3">
                     <div class="product-image-thumbnail" style="border: 1px solid #ddd; border-radius: 4px; padding: 5px; text-align: center;">
                       <%= link_to image_url, target: '_blank', title: image_url do %>
@@ -172,12 +195,15 @@
                   </div>
                 <% end %>
               </div>
-            <% end %>
+            <% end %> 
+<%
+=end%>
 
             <% if local_images.any? %>
               <h6 class="mt-3">Локальные картинки (<%= local_images.length %>)</h6>
               <div class="row mb-4">
                 <% local_images.each do |image_path| %>
+                  <% next unless image_path.present? && image_path.is_a?(String) %>
                   <% full_path = image_path.start_with?('/') ? image_path : "/#{image_path}" %>
                   <div class="col-sm-3 col-md-2 mb-3">
                     <div class="product-image-thumbnail" style="border: 1px solid #ddd; border-radius: 4px; padding: 5px; text-align: center;">
@@ -197,15 +223,24 @@
     </div>
   </div>
 
-  <% if @product.content.present? || @product.content_ru.present? || @product.material_info.present? || @product.material_info_ru.present? || @product.good_info.present? || @product.good_info_ru.present? %>
+  <% if @product.content.present? || @product.content_ru.present? || @product.material_info.present? || @product.material_info_ru.present? || @product.good_info.present? || @product.good_info_ru.present? || @product.short_description.present? || @product.materials.present? || @product.features.present? || @product.care_instructions.present? || @product.environmental_info.present? %>
     <div class="row mt-4">
       <div class="col-12">
         <div class="card">
           <div class="card-header">
-            <h5>Контент</h5>
+            <h5>Контент и описание</h5>
           </div>
           <div class="card-body">
             <div class="row">
+              <% if @product.short_description.present? %>
+                <div class="col-12 mb-4">
+                  <h6>Краткое описание</h6>
+                  <div class="border p-3" style="min-height: 50px;">
+                    <%= @product.short_description&.html_safe || content_tag(:em, "Нет", class: "text-muted") %>
+                  </div>
+                </div>
+              <% end %>
+
               <% if @product.content.present? || @product.content_ru.present? %>
                 <div class="col-md-6">
                   <h6>Описание (PL)</h6>
@@ -221,6 +256,15 @@
                 </div>
               <% end %>
 
+              <% if @product.materials.present? %>
+                <div class="col-12 mb-3">
+                  <h6>Материалы</h6>
+                  <div class="border p-3" style="min-height: 50px;">
+                    <%= @product.materials.is_a?(Array) ? simple_format(@product.materials.join("\n")) : @product.materials&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
+                  </div>
+                </div>
+              <% end %>
+
               <% if @product.material_info.present? || @product.material_info_ru.present? %>
                 <div class="col-md-6">
                   <h6>Материалы (PL)</h6>
@@ -232,6 +276,41 @@
                   <h6>Материалы (RU)</h6>
                   <div class="border p-3 mb-3" style="min-height: 100px;">
                     <%= @product.material_info_ru&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
+                  </div>
+                </div>
+              <% end %>
+
+              <% if @product.features.present? %>
+                <div class="col-12 mb-3">
+                  <h6>Характеристики</h6>
+                  <div class="border p-3" style="min-height: 50px;">
+                    <% if @product.features.is_a?(Array) %>
+                      <ul class="mb-0">
+                        <% @product.features.each do |feature| %>
+                          <li><%= feature.is_a?(Hash) ? feature.to_json : feature %></li>
+                        <% end %>
+                      </ul>
+                    <% else %>
+                      <%= @product.features&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
+                    <% end %>
+                  </div>
+                </div>
+              <% end %>
+
+              <% if @product.care_instructions.present? %>
+                <div class="col-12 mb-3">
+                  <h6>Инструкции по уходу</h6>
+                  <div class="border p-3" style="min-height: 50px;">
+                    <%= @product.care_instructions&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
+                  </div>
+                </div>
+              <% end %>
+
+              <% if @product.environmental_info.present? %>
+                <div class="col-12 mb-3">
+                  <h6>Экологическая информация</h6>
+                  <div class="border p-3" style="min-height: 50px;">
+                    <%= @product.environmental_info&.html_safe || content_tag(:em, "Нет информации", class: "text-muted") %>
                   </div>
                 </div>
               <% end %>
@@ -257,6 +336,118 @@
     </div>
   <% end %>
 
+  <% 
+    # Получаем связанные продукты
+    related_products = if @product.related_products.is_a?(Array)
+                         @product.related_products
+                       elsif @product.related_products.is_a?(String) && @product.related_products.present?
+                         begin
+                           JSON.parse(@product.related_products)
+                         rescue
+                           []
+                         end
+                       else
+                         []
+                       end
+    
+    set_items = if @product.set_items.is_a?(Array)
+                  @product.set_items
+                elsif @product.set_items.is_a?(String) && @product.set_items.present?
+                  begin
+                    JSON.parse(@product.set_items)
+                  rescue
+                    []
+                  end
+                else
+                  []
+                end
+    
+    bundle_items = if @product.bundle_items.is_a?(Array)
+                     @product.bundle_items
+                   elsif @product.bundle_items.is_a?(String) && @product.bundle_items.present?
+                     begin
+                       JSON.parse(@product.bundle_items)
+                     rescue
+                       []
+                     end
+                   else
+                     []
+                   end
+  %>
+  
+  <% if related_products.any? || set_items.any? || bundle_items.any? %>
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5>Связанные продукты</h5>
+          </div>
+          <div class="card-body">
+            <% if related_products.any? %>
+              <h6 class="mb-3">Рекомендуемые товары (<%= related_products.length %>)</h6>
+              <div class="mb-4">
+                <ul class="list-group">
+                  <% related_products.each do |item_no| %>
+                    <% related_product = Product.find_by(item_no: item_no) || Product.find_by(sku: item_no) %>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      <% if related_product %>
+                        <%= link_to "#{related_product.name} (#{item_no})", "/admin/products/#{related_product.id}", class: 'text-decoration-none' %>
+                        <span class="badge badge-primary badge-pill"><%= related_product.price ? number_to_currency(related_product.price, unit: 'Zl', format: '%n %u') : 'N/A' %></span>
+                      <% else %>
+                        <span><%= item_no %></span>
+                        <span class="badge badge-secondary badge-pill">Не найден</span>
+                      <% end %>
+                    </li>
+                  <% end %>
+                </ul>
+              </div>
+            <% end %>
+            
+            <% if set_items.any? %>
+              <h6 class="mb-3">Элементы набора (<%= set_items.length %>)</h6>
+              <div class="mb-4">
+                <ul class="list-group">
+                  <% set_items.each do |item_no| %>
+                    <% set_product = Product.find_by(item_no: item_no) || Product.find_by(sku: item_no) %>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      <% if set_product %>
+                        <%= link_to "#{set_product.name} (#{item_no})", "/admin/products/#{set_product.id}", class: 'text-decoration-none' %>
+                        <span class="badge badge-primary badge-pill"><%= set_product.price ? number_to_currency(set_product.price, unit: 'Zl', format: '%n %u') : 'N/A' %></span>
+                      <% else %>
+                        <span><%= item_no %></span>
+                        <span class="badge badge-secondary badge-pill">Не найден</span>
+                      <% end %>
+                    </li>
+                  <% end %>
+                </ul>
+              </div>
+            <% end %>
+            
+            <% if bundle_items.any? %>
+              <h6 class="mb-3">Элементы комплекта (<%= bundle_items.length %>)</h6>
+              <div class="mb-4">
+                <ul class="list-group">
+                  <% bundle_items.each do |item_no| %>
+                    <% bundle_product = Product.find_by(item_no: item_no) || Product.find_by(sku: item_no) %>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      <% if bundle_product %>
+                        <%= link_to "#{bundle_product.name} (#{item_no})", "/admin/products/#{bundle_product.id}", class: 'text-decoration-none' %>
+                        <span class="badge badge-primary badge-pill"><%= bundle_product.price ? number_to_currency(bundle_product.price, unit: 'Zl', format: '%n %u') : 'N/A' %></span>
+                      <% else %>
+                        <span><%= item_no %></span>
+                        <span class="badge badge-secondary badge-pill">Не найден</span>
+                      <% end %>
+                    </li>
+                  <% end %>
+                </ul>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      </div>
+    </div>
+  <% end %>
+
   <% if @product.delivery_type.present? || @product.delivery_name.present? || @product.delivery_cost.present? %>
     <div class="row mt-4">
       <div class="col-12">
@@ -276,7 +467,7 @@
               </tr>
               <tr>
                 <th>Стоимость доставки:</th>
-                <td><%= @product.delivery_cost ? number_to_currency(@product.delivery_cost, unit: 'BYN', format: '%n %u') : content_tag(:em, "Нет", class: "text-muted") %></td>
+                <td><%= @product.delivery_cost ? number_to_currency(@product.delivery_cost, unit: 'Zl', format: '%n %u') : content_tag(:em, "Нет", class: "text-muted") %></td>
               </tr>
               <tr>
                 <th>Причина доставки:</th>

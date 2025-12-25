@@ -63,7 +63,7 @@ Trestle.configure do |config|
   # config.default_navigation_icon = "fa fa-arrow-circle-o-right"
 
   # Add an explicit menu block to be added to the admin navigation.
-  #
+  # Группировка меню определяется через параметр group в menu do блоках ресурсов
   # config.menu do
   #   group "Custom Group" do
   #     item "Custom Link", "/admin/custom", icon: "fa fa-car", badge: { text: "NEW!", class: "label-success" }, priority: :first

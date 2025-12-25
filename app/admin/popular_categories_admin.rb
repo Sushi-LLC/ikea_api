@@ -1,7 +1,7 @@
 Trestle.resource(:popular_categories, model: Category) do
   scope :all, -> { Category.popular }, default: true
   menu do
-    item :popular_categories, icon: "fa fa-fire", label: "Популярные категории", priority: 1
+    item :popular_categories, icon: "fa fa-fire", label: "Популярные категории", priority: 3, group: "Catalog"
   end
 
   table do

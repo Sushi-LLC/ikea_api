@@ -111,17 +111,6 @@ Trestle.resource :cron_schedules, model: CronSchedule do
   end
 
   # Вспомогательные методы
-  def task_type_label(type)
-    {
-      'categories' => 'Категории',
-      'products' => 'Продукты',
-      'bestsellers' => 'Хиты продаж',
-      'popular_categories' => 'Популярные категории',
-      'category_images' => 'Картинки категорий',
-      'product_images' => 'Картинки продуктов'
-    }[type] || type
-  end
-
   def enabled_badge(enabled)
     color = enabled ? 'success' : 'secondary'
     text = enabled ? 'Да' : 'Нет'

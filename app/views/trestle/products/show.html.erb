@@ -163,37 +163,43 @@
                              []
                            end
             # Фильтруем и нормализуем пути - гарантируем, что каждый элемент это строка
-            local_images = Array(local_images).flatten.compact.map { |path|
+            local_images = Array(local_images).flatten.compact.flat_map { |path|
               # Преобразуем в строку
               path_str = path.to_s.strip
+              
               # Если это JSON-строка с массивом, парсим её
               if path_str.start_with?('[') && path_str.end_with?(']')
                 begin
                   parsed = JSON.parse(path_str)
+                  # Если это массив, возвращаем все элементы
                   parsed.is_a?(Array) ? parsed : [path_str]
                 rescue
                   # Если не JSON, убираем кавычки и скобки
-                  path_str = path_str.gsub(/^["\[\]]+|["\[\]]+$/, '').strip
-                  [path_str]
+                  cleaned = path_str.gsub(/^["\[\]]+|["\[\]]+$/, '').strip
+                  cleaned.present? ? [cleaned] : []
                 end
               else
                 # Убираем кавычки и скобки, если они есть
-                path_str = path_str.gsub(/^["\[\]]+|["\[\]]+$/, '').strip
-                [path_str]
+                cleaned = path_str.gsub(/^["\[\]]+|["\[\]]+$/, '').strip
+                cleaned.present? ? [cleaned] : []
               end
-            }.flatten.reject { |path_str|
-              # Отфильтровываем пустые, false, 'false'
+            }.reject { |path_str|
+              # Отфильтровываем пустые, false, 'false', и строки с запятыми (массивы)
               path_str.blank? || 
               path_str == false || 
               path_str == 'false' || 
               path_str.to_s.downcase == 'false' ||
               !path_str.is_a?(String) ||
-              path_str.include?(',') # Отфильтровываем строки с запятыми (вероятно, это массив в строке)
+              path_str.include?(',') || # Массив в строке
+              path_str.include?('","') || # JSON-массив в строке
+              path_str.include?('%22')   # URL-encoded кавычки
             }
           %>
 
           <% if remote_images.any? || local_images.any? %>
-            <% if remote_images.any? %>
+            <%
+=begin%>
+ <% if remote_images.any? %>
               <h6 class="mt-3">Удалённые картинки (<%= remote_images.length %>)</h6>
               <div class="row mb-4">
                 <% remote_images.each do |image_url| %>
@@ -207,7 +213,9 @@
                   </div>
                 <% end %>
               </div>
-            <% end %>
+            <% end %> 
+<%
+=end%>
 
             <% if local_images.any? %>
               <h6 class="mt-3">Локальные картинки (<%= local_images.length %>)</h6>

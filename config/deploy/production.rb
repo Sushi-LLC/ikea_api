@@ -1,12 +1,11 @@
 # Production server configuration
 server "45.135.234.22", user: "deploy", roles: %w{app db web}
 
-# Переопределяем SSH опции для использования пароля (если нужно)
+# SSH опции - используем только publickey (SSH ключи уже настроены)
 set :ssh_options, {
   keys: %w(~/.ssh/id_ed25519 ~/.ssh/id_rsa),
   forward_agent: false,
-  auth_methods: %w(password publickey),
-  password: 'f8RpYS53tYgLPwnk',
+  auth_methods: %w(publickey),
   verify_host_key: :never
 }
 

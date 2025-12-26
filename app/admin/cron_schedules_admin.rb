@@ -7,7 +7,15 @@ Trestle.resource :cron_schedules, model: CronSchedule do
   # Таблица
   table do
     column :task_type, header: "Тип задачи" do |schedule|
-      task_type_label(schedule.task_type)
+      case schedule.task_type
+      when 'categories' then 'Категории'
+      when 'products' then 'Продукты'
+      when 'bestsellers' then 'Хиты продаж'
+      when 'popular_categories' then 'Популярные категории'
+      when 'category_images' then 'Картинки категорий'
+      when 'product_images' then 'Картинки продуктов'
+      else schedule.task_type
+      end
     end
     column :schedule, header: "Расписание"
     column :enabled, header: "Включено" do |schedule|

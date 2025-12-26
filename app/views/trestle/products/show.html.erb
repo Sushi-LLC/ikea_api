@@ -224,14 +224,21 @@
                     image_path = image_path.to_s.strip
                     image_path = image_path.gsub(/^["\[\]]+|["\[\]]+$/, '').strip
                     
-                    # Пропускаем если пусто или не строка
-                    next if image_path.blank? || !image_path.is_a?(String)
+                    # Пропускаем если пусто, не строка, или содержит запятые/кавычки (массив)
+                    next if image_path.blank? || 
+                            !image_path.is_a?(String) ||
+                            image_path.include?(',') ||
+                            image_path.include?('","') ||
+                            image_path.include?('%22')
                     
                     # Формируем полный путь
                     full_path = image_path.start_with?('/') ? image_path : "/#{image_path}"
                     
-                    # Финальная проверка - full_path должен быть строкой
-                    next unless full_path.is_a?(String) && full_path.present?
+                    # Финальная проверка - full_path должен быть строкой без запятых
+                    next unless full_path.is_a?(String) && 
+                                full_path.present? && 
+                                !full_path.include?(',') &&
+                                !full_path.include?('%22')
                   %>
                   <div class="col-sm-3 col-md-2 mb-3">
                     <div class="product-image-thumbnail" style="border: 1px solid #ddd; border-radius: 4px; padding: 5px; text-align: center;">

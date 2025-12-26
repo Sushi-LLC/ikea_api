@@ -153,21 +153,26 @@
                              @product.local_images
                            elsif @product.local_images.is_a?(String) && @product.local_images.present?
                              begin
-                               JSON.parse(@product.local_images)
+                               parsed = JSON.parse(@product.local_images)
+                               # Если это массив массивов, распаковываем
+                               parsed.is_a?(Array) ? parsed.flatten : [parsed]
                              rescue
                                []
                              end
                            else
                              []
                            end
-            # Фильтруем пустые, nil, false и строку "false" значения
-            local_images = Array(local_images).compact.reject { |path| 
+            # Фильтруем и нормализуем пути
+            local_images = Array(local_images).flatten.compact.reject { |path| 
               path.blank? || 
               path == false || 
               path == 'false' || 
               !path.is_a?(String) ||
               path.to_s.downcase == 'false'
-            }
+            }.map { |path|
+              # Убираем кавычки и скобки, если они есть
+              path.to_s.gsub(/^["\[\]]+|["\[\]]+$/, '').strip
+            }.reject(&:blank?)
           %>
 
           <% if remote_images.any? || local_images.any? %>

@@ -13,12 +13,12 @@ class Category < ApplicationRecord
   scope :not_deleted, -> { where(is_deleted: [false, nil]) }
   # Верхнеуровневые категории (без родительских категорий)
   # parent_ids хранится как текст (JSON), поэтому проверяем на nil или пустой массив
-  # Используем ::text для приведения к тексту в PostgreSQL и правильное экранирование
-  # Также проверяем через десериализацию в Ruby для надежности
+  # В БД может храниться как строка "[]" (JSON-строка) или как NULL
+  # После десериализации это может быть массив [] или строка "[]" или ""
   scope :top_level, -> {
     where(
-      "parent_ids IS NULL OR parent_ids::text = ? OR parent_ids::text = ?",
-      '[]', ''
+      "parent_ids IS NULL OR parent_ids::text = ? OR parent_ids::text = ? OR parent_ids::text = ?",
+      '[]', '""', ''
     )
   }
   

@@ -27,23 +27,15 @@ if categories_to_process.any?
   puts "🚀 Запускаем задачу парсинга для необработанных категорий..."
   puts ""
   
-  # Запускаем задачу парсинга
-  task = ParserTask.create!(
-    task_type: 'products',
-    status: 'pending',
-    limit: nil # Без лимита, обрабатываем все категории
-  )
+  # Запускаем одну задачу парсинга для всех категорий
+  # ParseProductsJob обработает все категории из Category.not_deleted
+  # Но мы можем запустить задачу без лимита, чтобы обработать все
+  puts "   Запускаем ParseProductsJob без лимита..."
+  ParseProductsJob.perform_later(limit: nil)
   
-  # Запускаем задачу для каждой категории
-  categories_to_process.each do |category|
-    ParseProductsJob.perform_later(
-      category_id: category.ikea_id,
-      task_id: task.id
-    )
-  end
-  
-  puts "✅ Создана задача ##{task.id} для обработки #{categories_to_process.count} категорий"
-  puts "   Категории будут обработаны в фоновом режиме"
+  puts "✅ Задача парсинга запущена в фоновом режиме"
+  puts "   Будет обработано #{categories_to_process.count} необработанных категорий"
+  puts "   (всего категорий для обработки: #{categories_for_parsing.count})"
 else
   puts "ℹ️  Нет категорий для обработки"
   puts "   Все доступные категории уже обработаны или требуют прокси"

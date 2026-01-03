@@ -32,7 +32,11 @@
                     ['Категории', 'categories'],
                     ['Продукты', 'products'],
                     ['Хиты продаж', 'bestsellers'],
-                    ['Популярные категории', 'popular_categories']
+                    ['Популярные категории', 'popular_categories'],
+                    ['Картинки категорий', 'category_images'],
+                    ['Картинки продуктов', 'product_images'],
+                    ['Расширенные атрибуты продуктов', 'extended_attributes'],
+                    ['Курсы валют', 'currency_rates']
                   ]),
                   { prompt: 'Выберите тип задачи', class: "form-control", required: true } %>
             </div>
@@ -125,7 +129,18 @@
             <tbody>
               <% @recent_tasks.each do |task| %>
                 <tr>
-                  <td><%= task.task_type %></td>
+                  <td>
+                    <%= {
+                      'categories' => 'Категории',
+                      'products' => 'Продукты',
+                      'bestsellers' => 'Хиты продаж',
+                      'popular_categories' => 'Популярные категории',
+                      'category_images' => 'Картинки категорий',
+                      'product_images' => 'Картинки продуктов',
+                      'extended_attributes' => 'Расширенные атрибуты продуктов',
+                      'currency_rates' => 'Курсы валют'
+                    }[task.task_type] || task.task_type %>
+                  </td>
                   <td>
                     <span class="badge badge-<%= task.status == 'completed' ? 'success' : task.status == 'failed' ? 'danger' : 'primary' %>">
                       <%= task.status %>

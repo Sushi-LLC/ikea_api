@@ -82,47 +82,88 @@ class ParseProductsJob < ApplicationJob
   def process_category_products(category, task, stats, limit)
     offset = 0
     page_size = 50
+    max_retries = 3
+    retry_count = 0
     
-    Rails.logger.info "ParseProductsJob: Starting to fetch products for category #{category.ikea_id} (offset: #{offset})"
+    Rails.logger.info "ParseProductsJob: Starting to fetch products for category #{category.ikea_id} (#{category.name})"
+    
+    is_uuid_category = category.ikea_id.to_s.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) || category.ikea_id.to_s.include?('/')
+    proxy_list = ENV.fetch('PROXY_LIST', '').split(',').map(&:strip).reject(&:empty?)
+    
+    # Проверяем возможность обработки UUID категорий
+    if is_uuid_category && proxy_list.empty?
+      Rails.logger.warn "ParseProductsJob: Skipping UUID category #{category.ikea_id} (#{category.name}) - requires proxy for HTML parsing, but PROXY_LIST is empty"
+      return # Пропускаем категорию без ошибки
+    end
     
     loop do
       break if limit && stats[:processed] >= limit
       
       begin
-        # Пробуем получить продукты через API поиска (только для числовых ID)
         products_data = []
+        api_failed = false
         
         # Если category_id не UUID, пробуем API поиска
-        unless category.ikea_id.to_s.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) || category.ikea_id.to_s.include?('/')
-          products_data = IkeaApiService.search_products_by_category(
-            category.ikea_id,
-            offset: offset,
-            limit: page_size
-          )
-        end
-        
-        # Если API не вернул продукты (UUID категория или пустой результат), пробуем парсить HTML
-        if products_data.empty? && category.url.present?
-          # Проверяем наличие прокси для категорий с UUID (требуют парсинг HTML)
-          is_uuid_category = category.ikea_id.to_s.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) || category.ikea_id.to_s.include?('/')
-          proxy_list = ENV.fetch('PROXY_LIST', '').split(',').map(&:strip).reject(&:empty?)
-          
-          if is_uuid_category && proxy_list.empty?
-            Rails.logger.warn "ParseProductsJob: Skipping UUID category #{category.ikea_id} (#{category.name}) - requires proxy for HTML parsing, but PROXY_LIST is empty"
-            break # Пропускаем категорию без ошибки
+        unless is_uuid_category
+          begin
+            products_data = IkeaApiService.search_products_by_category(
+              category.ikea_id,
+              offset: offset,
+              limit: page_size
+            )
+            
+            # Если API вернул пустой результат, пробуем HTML парсинг как fallback
+            if products_data.empty? && category.url.present? && retry_count < max_retries
+              Rails.logger.info "ParseProductsJob: API returned no products for category #{category.name} (ID: #{category.ikea_id}), trying HTML parsing as fallback"
+              api_failed = true
+            end
+          rescue => e
+            Rails.logger.warn "ParseProductsJob: API request failed for category #{category.ikea_id}: #{e.message}, trying HTML parsing as fallback"
+            api_failed = true
           end
-          
-          Rails.logger.info "ParseProductsJob: API returned no products, trying to parse HTML page for category #{category.name}"
-          products_data = CategoryProductsFetcher.fetch(
-            category.url,
-            offset: offset,
-            limit: page_size
-          )
         end
         
-        Rails.logger.info "ParseProductsJob: Fetched #{products_data.length} products for category #{category.name} (ID: #{category.ikea_id})"
+        # Если API не вернул продукты (UUID категория, пустой результат или ошибка), пробуем парсить HTML
+        if (products_data.empty? || api_failed) && category.url.present?
+          begin
+            Rails.logger.info "ParseProductsJob: Trying to parse HTML page for category #{category.name} (URL: #{category.url})"
+            html_products = CategoryProductsFetcher.fetch(
+              category.url,
+              offset: offset,
+              limit: page_size
+            )
+            
+            if html_products.any?
+              products_data = html_products
+              Rails.logger.info "ParseProductsJob: HTML parsing found #{products_data.length} products for category #{category.name}"
+            elsif api_failed && retry_count < max_retries
+              retry_count += 1
+              Rails.logger.info "ParseProductsJob: Retry #{retry_count}/#{max_retries} for category #{category.name}"
+              sleep(2) # Небольшая задержка перед повтором
+              redo
+            end
+          rescue => e
+            Rails.logger.error "ParseProductsJob: HTML parsing failed for category #{category.ikea_id}: #{e.message}"
+            if retry_count < max_retries
+              retry_count += 1
+              Rails.logger.info "ParseProductsJob: Retry #{retry_count}/#{max_retries} for category #{category.name}"
+              sleep(2)
+              redo
+            end
+          end
+        end
         
-        break if products_data.empty?
+        Rails.logger.info "ParseProductsJob: Fetched #{products_data.length} products for category #{category.name} (ID: #{category.ikea_id}, offset: #{offset})"
+        
+        # Если не нашли продукты после всех попыток, логируем и выходим
+        if products_data.empty?
+          if offset == 0
+            Rails.logger.warn "ParseProductsJob: No products found for category #{category.name} (ID: #{category.ikea_id}) after all attempts"
+          end
+          break
+        end
+        
+        retry_count = 0 # Сбрасываем счетчик при успехе
         
         # Батчинг запросов наличия: собираем все item_no и делаем один запрос
         item_nos = products_data.map do |pd|
@@ -168,16 +209,20 @@ class ParseProductsJob < ApplicationJob
         break if products_data.length < page_size
         
       rescue => e
-        # Не считаем ошибкой пропуск категорий с UUID при отсутствии прокси
+        # Обработка ошибок с retry логикой
         error_message = e.message.to_s
-        is_uuid_category = category.ikea_id.to_s.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) || category.ikea_id.to_s.include?('/')
         is_proxy_error = error_message.include?('403 Forbidden') || error_message.include?('no proxies configured')
         
         if is_uuid_category && is_proxy_error
           Rails.logger.warn "ParseProductsJob: Skipping UUID category #{category.ikea_id} (#{category.name}) - requires proxy: #{error_message}"
           break # Пропускаем без инкремента ошибок
+        elsif retry_count < max_retries
+          retry_count += 1
+          Rails.logger.warn "ParseProductsJob: Error fetching products for category #{category.ikea_id} (attempt #{retry_count}/#{max_retries}): #{e.message}"
+          sleep(2) # Небольшая задержка перед повтором
+          redo
         else
-          Rails.logger.error "Error fetching products for category #{category.ikea_id}: #{e.message}"
+          Rails.logger.error "ParseProductsJob: Failed to fetch products for category #{category.ikea_id} (#{category.name}) after #{max_retries} attempts: #{e.message}"
           stats[:errors] += 1
           task.increment_errors!
           break

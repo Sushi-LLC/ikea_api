@@ -124,6 +124,27 @@ class ParseProductsJob < ApplicationJob
         
         break if products_data.empty?
         
+        # Батчинг запросов наличия: собираем все item_no и делаем один запрос
+        item_nos = products_data.map do |pd|
+          # Используем ту же логику, что и в process_product
+          pd['itemNoGlobal'] || pd[:itemNoGlobal] || 
+          pd['itemNo'] || pd[:itemNo] || 
+          pd['item_no'] || pd[:item_no] ||
+          pd.dig('gprDescription', 'itemNo')
+        end.compact.uniq
+        
+        availability_data = {}
+        if item_nos.any?
+          begin
+            Rails.logger.info "ParseProductsJob: Batch fetching availability for #{item_nos.length} items"
+            availability_data = IkeaApiService.check_availability(item_nos)
+            Rails.logger.info "ParseProductsJob: Received availability data for #{availability_data.keys.length} items"
+          rescue => e
+            Rails.logger.error("ParseProductsJob: Failed to batch fetch availability: #{e.message}")
+            # Продолжаем без данных наличия
+          end
+        end
+        
         products_data.each do |product_data|
           break if limit && stats[:processed] >= limit
           
@@ -131,7 +152,7 @@ class ParseProductsJob < ApplicationJob
           check_task_not_stopped!(task)
           
           begin
-            result = process_product(product_data, category)
+            result = process_product(product_data, category, availability_data)
             stats[:created] += 1 if result[:created]
             stats[:updated] += 1 if result[:updated]
             stats[:processed] += 1
@@ -165,7 +186,7 @@ class ParseProductsJob < ApplicationJob
     end
   end
 
-  def process_product(product_data, category)
+  def process_product(product_data, category, availability_data = {})
     # Нормализуем данные: CategoryProductsFetcher возвращает символьные ключи, API - строковые
     # Преобразуем в Hash с indifferent access для удобства
     if product_data.is_a?(Hash)
@@ -237,7 +258,7 @@ class ParseProductsJob < ApplicationJob
     
     # Логируем найденные флаги для отладки
     if is_bestseller || is_popular
-      Rails.logger.info "ParseProductsJob: Product #{sku} - is_bestseller: #{is_bestseller}, is_popular: #{is_popular}"
+      Rails.logger.debug "ParseProductsJob: Product #{sku} - is_bestseller: #{is_bestseller}, is_popular: #{is_popular}"
     end
     
     attributes = {
@@ -257,66 +278,33 @@ class ParseProductsJob < ApplicationJob
       is_popular: is_popular
     }
     
-    Rails.logger.info "ParseProductsJob: Base attributes for #{sku}: price=#{price}, images_count=#{images.length}"
+    Rails.logger.debug "ParseProductsJob: Base attributes for #{sku}: price=#{price}, images_count=#{images.length}"
     
     # Примечание: Расширенные атрибуты и загрузка картинок вынесены в отдельные задачи:
     # - FetchProductExtendedAttributesJob - для расширенных атрибутов
     # - DownloadProductImagesJob - для загрузки картинок
     
-    # Получаем количество (quantity) через API наличия (приоритет над HTML)
-    if item_no.present?
-      begin
-        Rails.logger.info "ParseProductsJob: Fetching availability for #{sku} (item_no: #{item_no})"
-        availability_data = IkeaApiService.check_availability([item_no])
-        Rails.logger.info "ParseProductsJob: Availability data for #{item_no}: #{availability_data.inspect}"
-        
-        # Пробуем найти данные по item_no (может быть строка или число)
-        availability = availability_data[item_no.to_s] || availability_data[item_no.to_i] || availability_data[item_no]
-        
-        if availability && availability[:quantity].present?
-          attributes[:quantity] = availability[:quantity] || availability['quantity'] || 0
-          Rails.logger.info "ParseProductsJob: Set quantity from API to #{attributes[:quantity]} for #{sku} (item_no: #{item_no})"
-          # Обновляем is_parcel из данных наличия, если доступно
-          if availability[:is_parcel].present? || availability['is_parcel'].present?
-            attributes[:is_parcel] = availability[:is_parcel] || availability['is_parcel']
-          end
-        else
-          Rails.logger.warn "ParseProductsJob: No availability data from API for item_no #{item_no} (available keys: #{availability_data.keys.inspect})"
-          # Если API не вернул данные, используем значение из HTML (если было установлено выше)
-          attributes[:quantity] ||= 0
+    # Получаем количество (quantity) из батч-запроса наличия
+    if item_no.present? && availability_data.present?
+      # Пробуем найти данные по item_no (может быть строка или число)
+      availability = availability_data[item_no.to_s] || availability_data[item_no.to_i] || availability_data[item_no]
+      
+      if availability && availability[:quantity].present?
+        attributes[:quantity] = availability[:quantity] || availability['quantity'] || 0
+        # Обновляем is_parcel из данных наличия, если доступно
+        if availability[:is_parcel].present? || availability['is_parcel'].present?
+          attributes[:is_parcel] = availability[:is_parcel] || availability['is_parcel']
         end
-      rescue => e
-        Rails.logger.error("ParseProductsJob: Failed to fetch availability for #{item_no}: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
-        # Если API ошибся, используем значение из HTML (если было установлено выше)
+      else
         attributes[:quantity] ||= 0
       end
     else
-      Rails.logger.warn "ParseProductsJob: No item_no for #{sku}, skipping availability check"
       attributes[:quantity] ||= 0
     end
     
     # Примечание: Переводы вынесены в FetchProductExtendedAttributesJob
-    # Здесь только базовый перевод названия для быстрого отображения
-    if item_no.present? && attributes[:name_ru].blank? && attributes[:name].present?
-      begin
-        lt_details = LtDetailsFetcher.fetch(item_no)
-        if lt_details.present? && lt_details[:translated] && lt_details[:name].present?
-          attributes[:name_ru] = lt_details[:name]
-          attributes[:translated] = true
-        else
-          # Fallback на автоматический перевод
-          attributes[:name_ru] = TranslationService.translate(
-            attributes[:name],
-            target_lang: 'ru',
-            source_lang: 'pl'
-          )
-          attributes[:translated] = false
-        end
-      rescue => e
-        Rails.logger.warn("ParseProductsJob: Translation failed for product #{sku}: #{e.message}")
-        attributes[:translated] = false
-      end
-    end
+    # Здесь НЕ делаем перевод, чтобы не замедлять базовый парсинг
+    # Перевод будет выполнен в FetchProductExtendedAttributesJob
     
     if product
       product.update!(attributes)

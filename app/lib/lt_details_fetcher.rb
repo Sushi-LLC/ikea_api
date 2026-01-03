@@ -115,7 +115,9 @@ class LtDetailsFetcher
       end
       
       http.use_ssl = uri.scheme == 'https'
-      http.read_timeout = 30
+      # Уменьшаем таймаут для быстрого отказа при отсутствии прокси
+      http.read_timeout = ENV.fetch('HTTP_TIMEOUT', 10).to_i
+      http.open_timeout = 5
       
       request = Net::HTTP::Get.new(uri.path)
       request['User-Agent'] = ENV.fetch('USER_AGENT', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')

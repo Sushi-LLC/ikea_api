@@ -3,7 +3,9 @@ namespace :deploy do
     desc 'Restart Sidekiq via systemd'
     task :restart do
       on roles(:app) do
-        execute :sudo, 'systemctl', 'restart', 'ikea_back_sidekiq'
+        within release_path do
+          execute :sudo, 'systemctl', 'restart', 'ikea_back_sidekiq'
+        end
         info '✅ Sidekiq перезапущен через systemd'
       end
     end

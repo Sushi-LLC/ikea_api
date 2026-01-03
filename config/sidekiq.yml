@@ -2,6 +2,7 @@
 # Использование: bundle exec sidekiq -C config/sidekiq.yml
 
 :queues:
+  - ikea_api_production_parser
   - parser
   - default
 

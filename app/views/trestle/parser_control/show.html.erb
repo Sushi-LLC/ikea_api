@@ -73,7 +73,9 @@
                         'bestsellers' => 'Хиты продаж',
                         'popular_categories' => 'Популярные категории',
                         'category_images' => 'Картинки категорий',
-                        'product_images' => 'Картинки продуктов'
+                        'product_images' => 'Картинки продуктов',
+                        'extended_attributes' => 'Расширенные атрибуты продуктов',
+                        'currency_rates' => 'Курсы валют'
                       }[task.task_type] || task.task_type %>
                       <% if task.status == 'pending' %>
                         <span class="badge badge-secondary ml-2">Ожидание</span>
@@ -261,7 +263,9 @@
             'bestsellers': 'Хиты продаж',
             'popular_categories': 'Популярные категории',
             'category_images': 'Картинки категорий',
-            'product_images': 'Картинки продуктов'
+            'product_images': 'Картинки продуктов',
+            'extended_attributes': 'Расширенные атрибуты продуктов',
+            'currency_rates': 'Курсы валют'
           }[task.task_type] || task.task_type;
           
           const limitText = task.limit ? task.limit : '∞';

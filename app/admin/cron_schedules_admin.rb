@@ -14,6 +14,8 @@ Trestle.resource :cron_schedules, model: CronSchedule do
       when 'popular_categories' then 'Популярные категории'
       when 'category_images' then 'Картинки категорий'
       when 'product_images' then 'Картинки продуктов'
+      when 'extended_attributes' then 'Расширенные атрибуты продуктов'
+      when 'currency_rates' then 'Курсы валют'
       else schedule.task_type
       end
     end
@@ -42,6 +44,8 @@ Trestle.resource :cron_schedules, model: CronSchedule do
                   when 'popular_categories' then 'Популярные категории'
                   when 'category_images' then 'Картинки категорий'
                   when 'product_images' then 'Картинки продуктов'
+                  when 'extended_attributes' then 'Расширенные атрибуты продуктов'
+                  when 'currency_rates' then 'Курсы валют'
                   else t
                   end
           [label, t]

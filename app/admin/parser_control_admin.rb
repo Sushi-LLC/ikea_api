@@ -212,6 +212,10 @@ Trestle.resource :parser_control, model: ParserControl do
         DownloadCategoryImagesJob
       when 'product_images'
         DownloadProductImagesJob
+      when 'extended_attributes'
+        FetchProductExtendedAttributesJob
+      when 'currency_rates'
+        FetchCurrencyRatesJob
       end
     end
 
@@ -222,7 +226,9 @@ Trestle.resource :parser_control, model: ParserControl do
         'bestsellers' => 'Хиты продаж',
         'popular_categories' => 'Популярные категории',
         'category_images' => 'Картинки категорий',
-        'product_images' => 'Картинки продуктов'
+        'product_images' => 'Картинки продуктов',
+        'extended_attributes' => 'Расширенные атрибуты продуктов',
+        'currency_rates' => 'Курсы валют'
       }[type] || type
     end
   end

@@ -23,6 +23,22 @@ module Api
         categories = Category.active.includes(:products)
         render json: CategorySerializer.new(categories)
       end
+      
+      def map
+        # Карта категорий: переведенное имя + ссылка + продукты
+        categories = Category.active
+                            .includes(:products)
+                            .where.not(translated_name: nil)
+                            .where.not(translated_name: '')
+        
+        render json: CategoryMapSerializer.new(categories, {
+          include: [],
+          meta: {
+            total: categories.count,
+            generated_at: Time.current.iso8601
+          }
+        })
+      end
     end
   end
 end

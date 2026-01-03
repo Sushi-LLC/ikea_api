@@ -1,16 +1,28 @@
 # Сервис для загрузки изображений
-require 'net/http'
-require 'uri'
-require 'fileutils'
-require 'digest/sha1'
+# Использует ImageStorage для абстракции над различными хранилищами (локальное, S3, Cloudinary)
+require_relative 'image_storage/base'
+require_relative 'image_storage/local'
+require_relative 'image_storage/s3'
+require_relative 'image_storage/cloudinary'
 
 class ImageDownloader
-  BASE_STORAGE_PATH = Rails.root.join('public', 'images').freeze
-  CATEGORIES_PATH = BASE_STORAGE_PATH.join('categories').freeze
-  PRODUCTS_PATH = BASE_STORAGE_PATH.join('products').freeze
-  
   # Конкурентность загрузки (можно настроить через ENV)
   CONCURRENCY_IMAGES = ENV.fetch('IMG_DL_IMAGES', '6').to_i
+  
+  # Определяем, какое хранилище использовать (по умолчанию локальное)
+  def self.storage
+    @storage ||= begin
+      storage_type = ENV.fetch('IMAGE_STORAGE_TYPE', 'local').downcase
+      case storage_type
+      when 's3'
+        ImageStorage::S3
+      when 'cloudinary'
+        ImageStorage::Cloudinary
+      else
+        ImageStorage::Local
+      end
+    end
+  end
 
   class << self
     # Загрузить изображение категории
@@ -18,16 +30,18 @@ class ImageDownloader
       return nil unless image_url.present?
       
       begin
-        file_path = CATEGORIES_PATH.join("#{category.ikea_id}.jpg")
-        FileUtils.mkdir_p(CATEGORIES_PATH)
+        stored_path = storage.upload(image_url, category_id: category.ikea_id)
+        return nil unless stored_path
         
-        download_image(image_url, file_path)
+        # Сохраняем путь или URL в зависимости от типа хранилища
+        if storage == ImageStorage::Local
+          category.update_column(:local_image_path, stored_path)
+        else
+          # Для облачных хранилищ сохраняем URL
+          category.update_column(:local_image_path, storage.url(stored_path))
+        end
         
-        # Сохраняем относительный путь для использования в приложении
-        relative_path = file_path.relative_path_from(Rails.root.join('public'))
-        category.update_column(:local_image_path, relative_path.to_s)
-        
-        relative_path.to_s
+        stored_path
       rescue => e
         Rails.logger.error "Failed to download category image #{image_url}: #{e.message}"
         nil
@@ -68,7 +82,7 @@ class ImageDownloader
       failed = 0
       urls_to_download = limit ? urls.first(limit) : urls
       
-      Rails.logger.info "ImageDownloader: Starting download of #{urls_to_download.length} images for product #{product.sku} (existing: #{local_paths.size})"
+      Rails.logger.info "ImageDownloader: Starting download of #{urls_to_download.length} images for product #{product.sku} (existing: #{local_paths.size}, storage: #{storage.name})"
       
       # Параллельная загрузка с ограничением конкурентности
       mutex = Mutex.new
@@ -87,38 +101,26 @@ class ImageDownloader
           mutex.synchronize { active_threads += 1 }
           
           begin
-            # Нормализуем URL
-            normalized_url = image_url.to_s.strip
-            next if normalized_url.empty?
+            # Используем storage для загрузки
+            stored_path = storage.upload(image_url, product_sku: product.sku)
             
-            # Преобразуем относительные URL в абсолютные
-            unless normalized_url.start_with?('http')
-              normalized_url = "https://www.ikea.com#{normalized_url}" if normalized_url.start_with?('/')
-            end
-            
-            # Генерируем sharded path на основе SHA1 хеша URL
-            hash = Digest::SHA1.hexdigest(normalized_url)
-            ext = get_ext_from_url(normalized_url)
-            sharded_path = build_sharded_path(hash, ext)
-            
-            # Проверяем, не существует ли уже файл
-            if File.exist?(sharded_path[:abs])
+            if stored_path
+              # Для облачных хранилищ получаем URL, для локального - путь
+              path_or_url = if storage == ImageStorage::Local
+                            stored_path
+                          else
+                            storage.url(stored_path)
+                          end
+              
               mutex.synchronize do
-                local_paths.add(sharded_path[:rel])
+                local_paths.add(path_or_url)
+                downloaded += 1
               end
-              Rails.logger.debug "ImageDownloader: Image already exists for #{product.sku}: #{sharded_path[:rel]}"
-              next
+              Rails.logger.debug "ImageDownloader: Successfully uploaded image for #{product.sku}: #{path_or_url}"
+            else
+              mutex.synchronize { failed += 1 }
+              Rails.logger.warn "ImageDownloader: Failed to upload image #{image_url} for #{product.sku}"
             end
-            
-            # Создаем директорию и загружаем
-            FileUtils.mkdir_p(File.dirname(sharded_path[:abs]))
-            download_image(normalized_url, sharded_path[:abs])
-            
-            mutex.synchronize do
-              local_paths.add(sharded_path[:rel])
-              downloaded += 1
-            end
-            Rails.logger.debug "ImageDownloader: Successfully downloaded image for #{product.sku}: #{sharded_path[:rel]}"
           rescue => e
             mutex.synchronize { failed += 1 }
             Rails.logger.error "ImageDownloader: Failed to download product image #{image_url} for #{product.sku}: #{e.message}\n#{e.backtrace.first(3).join("\n")}"
@@ -151,63 +153,7 @@ class ImageDownloader
       local_images_array
     end
 
-    private
-
-    # Генерирует sharded path для файла на основе хеша
-    # Пример: hash=abcdef... -> ab/cd/ef/abcdef.jpg
-    def build_sharded_path(hash, ext)
-      a = hash[0..1]
-      b = hash[2..3]
-      c = hash[4..5]
-      filename = "#{hash}#{ext}"
-      rel_path = File.join('images', 'products', a, b, c, filename)
-      abs_path = Rails.root.join('public', rel_path)
-      { rel: rel_path.gsub(/\\/, '/'), abs: abs_path }
-    end
-    
-    # Определяет расширение файла из URL
-    def get_ext_from_url(url)
-      begin
-        uri = URI.parse(url)
-        base = File.basename(uri.path)
-        ext = base.match(/\.(jpg|jpeg|png|webp|gif|avif)$/i)
-        ext ? ".#{ext[1].downcase}" : '.jpg'
-      rescue
-        '.jpg'
-      end
-    end
-
-    def download_image(url, file_path)
-      ProxyRotator.with_proxy_retry do |proxy_options|
-        uri = URI.parse(url)
-        
-        # Используем Net::HTTP для более гибкой работы с прокси
-        http = Net::HTTP.new(uri.host, uri.port)
-        http.use_ssl = uri.scheme == 'https'
-        http.read_timeout = 30
-        
-        # Настраиваем прокси, если есть
-        if proxy_options && proxy_options[:http_proxyaddr]
-          http.proxy_from_env = false
-          http.proxy_address = proxy_options[:http_proxyaddr]
-          http.proxy_port = proxy_options[:http_proxyport]
-          http.proxy_user = proxy_options[:http_proxyuser]
-          http.proxy_pass = proxy_options[:http_proxypass]
-        end
-        
-        request = Net::HTTP::Get.new(uri.path)
-        request['User-Agent'] = ENV.fetch('USER_AGENT', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-        
-        response = http.request(request)
-        
-        if response.is_a?(Net::HTTPSuccess)
-          File.binwrite(file_path, response.body)
-        else
-          raise StandardError, "HTTP error: #{response.code} #{response.message}"
-        end
-      end
-    end
-
   end
 end
+
 

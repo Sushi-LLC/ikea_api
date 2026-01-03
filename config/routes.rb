@@ -27,6 +27,7 @@ Rails.application.routes.draw do
         collection do
           get :popular
           get :tree
+          get :map
         end
       end
       

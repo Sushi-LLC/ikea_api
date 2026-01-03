@@ -49,7 +49,9 @@ class ParseProductsJob < ApplicationJob
       stats[:duration] = Time.current - start_time
       notify_completed('products', stats)
       
-      # Картинки продуктов загружаются вместе с продуктами в process_product
+      # Примечание: Картинки и расширенные атрибуты загружаются отдельными задачами:
+      # - DownloadProductImagesJob - для загрузки картинок
+      # - FetchProductExtendedAttributesJob - для расширенных атрибутов
       
     rescue StandardError => e
       # Если задача была остановлена вручную - просто прерываем выполнение
@@ -238,108 +240,9 @@ class ParseProductsJob < ApplicationJob
     
     Rails.logger.info "ParseProductsJob: Base attributes for #{sku}: price=#{price}, images_count=#{images.length}"
     
-    # Получаем расширенные параметры через PlDetailsFetcher (обязательные поля)
-    begin
-      Rails.logger.info "ParseProductsJob: Fetching PL details for #{sku} from #{url}"
-      pl_details = PlDetailsFetcher.fetch(url)
-      Rails.logger.info "ParseProductsJob: PL details fetched for #{sku}: #{pl_details.present? ? 'present' : 'empty'}"
-      
-      if pl_details.present?
-        # Изображения: объединяем с уже имеющимися, приоритет у изображений со страницы продукта
-        if pl_details[:images].present? && pl_details[:images].is_a?(Array) && pl_details[:images].any?
-          # Объединяем изображения, убирая дубликаты
-          existing_images = attributes[:images] || []
-          all_images = existing_images + pl_details[:images]
-          attributes[:images] = all_images.compact.uniq
-          Rails.logger.info "ParseProductsJob: Merged images for #{sku}: total=#{attributes[:images].length} (from API: #{existing_images.length}, from page: #{pl_details[:images].length})"
-        elsif pl_details[:images].present?
-          Rails.logger.warn "ParseProductsJob: pl_details[:images] is present but not an array or empty: #{pl_details[:images].class} - #{pl_details[:images].inspect}"
-        else
-          Rails.logger.warn "ParseProductsJob: No images found in pl_details for #{sku}"
-        end
-        
-        # Вес и размеры (обязательные поля)
-        attributes[:weight] = pl_details[:weight] if pl_details[:weight]
-        attributes[:net_weight] = pl_details[:net_weight] if pl_details[:net_weight]
-        attributes[:package_volume] = pl_details[:package_volume] if pl_details[:package_volume]
-        attributes[:package_dimensions] = pl_details[:package_dimensions] if pl_details[:package_dimensions]
-        attributes[:dimensions] = pl_details[:dimensions] if pl_details[:dimensions]
-        
-        # Коллекция (обязательное поле)
-        attributes[:collection] = pl_details[:collection] if pl_details[:collection]
-        
-        # Описание продукта из PL страницы (если не получено из LT)
-        if pl_details[:description].present? && attributes[:content].blank?
-          attributes[:content] = pl_details[:description]
-        end
-        if pl_details[:short_description].present?
-          attributes[:short_description] = pl_details[:short_description]
-        end
-        
-        # Расширенные атрибуты
-        if pl_details[:materials].present?
-          # Материалы могут быть строкой или массивом
-          attributes[:materials] = pl_details[:materials].is_a?(Array) ? pl_details[:materials].join("\n") : pl_details[:materials]
-        end
-        if pl_details[:features].present?
-          # Характеристики могут быть массивом или строкой
-          attributes[:features] = pl_details[:features]
-        end
-        if pl_details[:care_instructions].present?
-          attributes[:care_instructions] = pl_details[:care_instructions]
-        end
-        if pl_details[:environmental_info].present?
-          attributes[:environmental_info] = pl_details[:environmental_info]
-        end
-        if pl_details[:short_description].present?
-          attributes[:short_description] = pl_details[:short_description]
-        end
-        
-        # Связанные продукты (обязательное поле)
-        attributes[:set_items] = pl_details[:set_items] if pl_details[:set_items]
-        attributes[:bundle_items] = pl_details[:bundle_items] if pl_details[:bundle_items]
-        if pl_details[:related_products].present?
-          attributes[:related_products] = pl_details[:related_products]
-          Rails.logger.info "ParseProductsJob: Found #{pl_details[:related_products].length} related products for #{sku}: #{pl_details[:related_products].inspect}"
-        else
-          Rails.logger.warn "ParseProductsJob: No related products found for #{sku}"
-        end
-        
-        # Видео и инструкции
-        attributes[:videos] = pl_details[:videos] if pl_details[:videos]
-        attributes[:manuals] = pl_details[:manuals] if pl_details[:manuals]
-        
-        # Данные из модального окна
-        attributes[:designer] = pl_details[:designer] if pl_details[:designer]
-        attributes[:safety_info] = pl_details[:safety_info] if pl_details[:safety_info]
-        attributes[:good_to_know] = pl_details[:good_to_know] if pl_details[:good_to_know]
-        if pl_details[:assembly_documents].present?
-          attributes[:assembly_documents] = pl_details[:assembly_documents]
-          Rails.logger.info "ParseProductsJob: Found #{pl_details[:assembly_documents].length} assembly documents for #{sku}"
-        end
-        
-        # Если цена не была установлена ранее, пробуем получить из pl_details
-        if attributes[:price].blank? && pl_details[:price]
-          attributes[:price] = pl_details[:price]
-        end
-        
-        # Определяем is_parcel (вес <= 30 кг), если не установлено из availability
-        if attributes[:weight] && attributes[:is_parcel].nil?
-          attributes[:is_parcel] = attributes[:weight] <= 30.0
-        end
-        
-        # Используем наличие из HTML, если доступно
-        if pl_details[:availability].present?
-          html_availability = pl_details[:availability]
-          if html_availability[:quantity].present? && (attributes[:quantity].blank? || attributes[:quantity] == 0)
-            attributes[:quantity] = html_availability[:quantity]
-            Rails.logger.info "ParseProductsJob: Set quantity from HTML to #{attributes[:quantity]} for #{sku}"
-          end
-        end
-      end
-    rescue => e
-      Rails.logger.error("ParseProductsJob: Failed to fetch PL details for #{sku}: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
-    end
+    # Примечание: Расширенные атрибуты и загрузка картинок вынесены в отдельные задачи:
+    # - FetchProductExtendedAttributesJob - для расширенных атрибутов
+    # - DownloadProductImagesJob - для загрузки картинок
     
     # Получаем количество (quantity) через API наличия (приоритет над HTML)
     if item_no.present?
@@ -373,192 +276,27 @@ class ParseProductsJob < ApplicationJob
       attributes[:quantity] ||= 0
     end
     
-    # Получаем переводы через LtDetailsFetcher
-    if item_no.present?
+    # Примечание: Переводы вынесены в FetchProductExtendedAttributesJob
+    # Здесь только базовый перевод названия для быстрого отображения
+    if item_no.present? && attributes[:name_ru].blank? && attributes[:name].present?
       begin
-        Rails.logger.info "ParseProductsJob: Fetching LT details for #{sku} (item_no: #{item_no})"
         lt_details = LtDetailsFetcher.fetch(item_no)
-        Rails.logger.info "ParseProductsJob: LT details fetched for #{item_no}: #{lt_details.present? ? 'present' : 'empty'}, translated: #{lt_details[:translated]}"
-        
-        if lt_details.present? && lt_details[:translated]
-          # Переводим название продукта
-          if lt_details[:name].present?
-            attributes[:name_ru] = lt_details[:name]
-          else
-            # Если нет перевода из LT, используем сервис перевода
-            begin
-              attributes[:name_ru] = TranslationService.translate(
-                name,
-                target_lang: 'ru',
-                source_lang: 'pl'
-              ) if name.present?
-            rescue => e
-              Rails.logger.warn("Translation failed for product #{sku}: #{e.message}")
-            end
-          end
-          
-          # Материалы из LT (приоритет над PL) - как в оригинальном парсере
-          if lt_details[:materials].present? || lt_details[:material_text].present?
-            attributes[:materials] = lt_details[:materials] || lt_details[:material_text]
-            attributes[:materials_ru] = lt_details[:materials] || lt_details[:material_text]
-            Rails.logger.info "ParseProductsJob: Set materials from LT for #{sku}"
-          end
-          
-          # "Полезно знать" из LT (приоритет над PL)
-          if lt_details[:good_to_know].present? || lt_details[:good_text].present?
-            attributes[:good_to_know] = lt_details[:good_to_know] || lt_details[:good_text]
-            attributes[:good_to_know_ru] = lt_details[:good_to_know] || lt_details[:good_text]
-            Rails.logger.info "ParseProductsJob: Set good_to_know from LT for #{sku}"
-          end
-          
-          # Описание продукта (content) из LT - приоритет над PL, если не было получено из PL
-          if lt_details[:content].present? || lt_details[:details_text].present?
-            if attributes[:content].blank?
-              attributes[:content] = lt_details[:content] || lt_details[:details_text]
-              attributes[:content_ru] = lt_details[:content] || lt_details[:details_text]
-              Rails.logger.info "ParseProductsJob: Set content from LT for #{sku}"
-            end
-          end
-          
-          # Старые поля для совместимости
-          attributes[:material_info] = lt_details[:material_text] if lt_details[:material_text].present?
-          attributes[:material_info_ru] = lt_details[:material_text] if lt_details[:material_text].present?
-          attributes[:good_info] = lt_details[:good_text] if lt_details[:good_text].present?
-          attributes[:good_info_ru] = lt_details[:good_text] if lt_details[:good_text].present?
-          
+        if lt_details.present? && lt_details[:translated] && lt_details[:name].present?
+          attributes[:name_ru] = lt_details[:name]
           attributes[:translated] = true
         else
-          # Если перевод не получен, пробуем через сервис перевода
-          begin
-            attributes[:name_ru] = TranslationService.translate(
-              name,
-              target_lang: 'ru',
-              source_lang: 'pl'
-            ) if name.present?
-            attributes[:translated] = false
-          rescue => e
-            Rails.logger.warn("Translation failed for product #{sku}: #{e.message}")
-            attributes[:translated] = false
-          end
-        end
-      rescue => e
-        Rails.logger.warn("Failed to fetch LT details for #{item_no}: #{e.message}")
-        # Пробуем перевести только название
-        begin
+          # Fallback на автоматический перевод
           attributes[:name_ru] = TranslationService.translate(
-            name,
+            attributes[:name],
             target_lang: 'ru',
             source_lang: 'pl'
-          ) if name.present?
-        rescue => e2
-          Rails.logger.warn("Translation failed for product #{sku}: #{e2.message}")
+          )
+          attributes[:translated] = false
         end
+      rescue => e
+        Rails.logger.warn("ParseProductsJob: Translation failed for product #{sku}: #{e.message}")
         attributes[:translated] = false
       end
-    end
-    
-    # Переводим все текстовые атрибуты на русский язык (если еще не переведены)
-    # Делаем это после получения всех данных, но перед сохранением
-    begin
-      Rails.logger.info "ParseProductsJob: Translating text attributes for #{sku}"
-      
-      # Переводим название (если еще не переведено из LT)
-      if attributes[:name_ru].blank? && attributes[:name].present?
-        attributes[:name_ru] = TranslationService.translate(
-          attributes[:name],
-          target_lang: 'ru',
-          source_lang: 'pl'
-        )
-      end
-      
-      # Переводим краткое описание
-      if attributes[:short_description].present? && attributes[:short_description_ru].blank?
-        attributes[:short_description_ru] = TranslationService.translate(
-          attributes[:short_description],
-          target_lang: 'ru',
-          source_lang: 'pl'
-        )
-      end
-      
-      # Переводим описание (content) - только если не получено из LT
-      if attributes[:content].present? && attributes[:content_ru].blank?
-        attributes[:content_ru] = TranslationService.translate(
-          attributes[:content],
-          target_lang: 'ru',
-          source_lang: 'pl'
-        )
-      end
-      
-      # Переводим материалы
-      if attributes[:materials].present? && attributes[:materials_ru].blank?
-        materials_text = attributes[:materials].is_a?(Array) ? attributes[:materials].join("\n") : attributes[:materials]
-        attributes[:materials_ru] = TranslationService.translate(
-          materials_text,
-          target_lang: 'ru',
-          source_lang: 'pl'
-        )
-      end
-      
-      # Переводим характеристики (features)
-      if attributes[:features].present? && attributes[:features_ru].blank?
-        features_text = attributes[:features].is_a?(Array) ? attributes[:features].join("\n") : attributes[:features]
-        attributes[:features_ru] = TranslationService.translate(
-          features_text,
-          target_lang: 'ru',
-          source_lang: 'pl'
-        )
-      end
-      
-      # Переводим инструкции по уходу
-      if attributes[:care_instructions].present? && attributes[:care_instructions_ru].blank?
-        attributes[:care_instructions_ru] = TranslationService.translate(
-          attributes[:care_instructions],
-          target_lang: 'ru',
-          source_lang: 'pl'
-        )
-      end
-      
-      # Переводим экологическую информацию
-      if attributes[:environmental_info].present? && attributes[:environmental_info_ru].blank?
-        attributes[:environmental_info_ru] = TranslationService.translate(
-          attributes[:environmental_info],
-          target_lang: 'ru',
-          source_lang: 'pl'
-        )
-      end
-      
-      # Переводим дизайнера (если это текст, а не просто имя)
-      if attributes[:designer].present? && attributes[:designer_ru].blank?
-        # Дизайнер обычно имя собственное, но переводим на всякий случай
-        attributes[:designer_ru] = TranslationService.translate(
-          attributes[:designer],
-          target_lang: 'ru',
-          source_lang: 'pl'
-        )
-      end
-      
-      # Переводим информацию о безопасности
-      if attributes[:safety_info].present? && attributes[:safety_info_ru].blank?
-        attributes[:safety_info_ru] = TranslationService.translate(
-          attributes[:safety_info],
-          target_lang: 'ru',
-          source_lang: 'pl'
-        )
-      end
-      
-      # Переводим "Полезно знать"
-      if attributes[:good_to_know].present? && attributes[:good_to_know_ru].blank?
-        attributes[:good_to_know_ru] = TranslationService.translate(
-          attributes[:good_to_know],
-          target_lang: 'ru',
-          source_lang: 'pl'
-        )
-      end
-      
-      Rails.logger.info "ParseProductsJob: Translation completed for #{sku}"
-    rescue => e
-      Rails.logger.error("ParseProductsJob: Translation failed for #{sku}: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
-      # Продолжаем работу даже если перевод не удался
     end
     
     if product
@@ -569,33 +307,8 @@ class ParseProductsJob < ApplicationJob
       result = { created: true, updated: false }
     end
     
-    # Загружаем изображения продукта сразу после сохранения
-    images_to_download = attributes[:images] || []
-    
-    # Если images - это строка (JSON), парсим её
-    if images_to_download.is_a?(String)
-      begin
-        images_to_download = JSON.parse(images_to_download)
-      rescue JSON::ParserError
-        Rails.logger.warn "ParseProductsJob: Failed to parse images JSON for #{product.sku}: #{images_to_download}"
-        images_to_download = []
-      end
-    end
-    
-    Rails.logger.info "ParseProductsJob: Checking images for #{product.sku}: count=#{images_to_download.length}, type=#{images_to_download.class}, images=#{images_to_download[0..2].inspect}"
-    
-    if images_to_download.present? && images_to_download.is_a?(Array) && images_to_download.any?
-      begin
-        Rails.logger.info "ParseProductsJob: Downloading #{images_to_download.length} images for product #{product.sku}"
-        downloaded = ImageDownloader.download_product_images(product, images_to_download, limit: nil)
-        Rails.logger.info "ParseProductsJob: Downloaded #{downloaded.length} images for product #{product.sku} (requested: #{images_to_download.length})"
-      rescue => e
-        Rails.logger.error("ParseProductsJob: Failed to download images for product #{product.sku}: #{e.message}\n#{e.backtrace.first(5).join("\n")}")
-        # Не прерываем процесс парсинга из-за ошибки загрузки изображений
-      end
-    else
-      Rails.logger.warn "ParseProductsJob: No images to download for product #{product.sku} (images: #{images_to_download.inspect}, type: #{images_to_download.class})"
-    end
+    # Примечание: Загрузка изображений вынесена в отдельную задачу DownloadProductImagesJob
+    # Здесь только сохраняем URL изображений в поле images
     
     result
   end

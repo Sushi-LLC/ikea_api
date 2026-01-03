@@ -72,7 +72,9 @@ class TelegramService
         'bestsellers' => 'Хиты продаж',
         'popular_categories' => 'Популярные категории',
         'category_images' => 'Картинки категорий',
-        'product_images' => 'Картинки продуктов'
+        'product_images' => 'Картинки продуктов',
+        'extended_attributes' => 'Расширенные атрибуты продуктов',
+        'currency_rates' => 'Курсы валют'
       }[task_type.to_s] || task_type.to_s
     end
 

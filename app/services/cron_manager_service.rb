@@ -78,6 +78,10 @@ class CronManagerService
         DownloadCategoryImagesJob
       when 'product_images'
         DownloadProductImagesJob
+      when 'extended_attributes'
+        FetchProductExtendedAttributesJob
+      when 'currency_rates'
+        FetchCurrencyRatesJob
       else
         raise ArgumentError, "Unknown task type: #{task_type}"
       end

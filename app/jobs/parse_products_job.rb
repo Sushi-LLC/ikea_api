@@ -103,6 +103,15 @@ class ParseProductsJob < ApplicationJob
         
         # Если API не вернул продукты (UUID категория или пустой результат), пробуем парсить HTML
         if products_data.empty? && category.url.present?
+          # Проверяем наличие прокси для категорий с UUID (требуют парсинг HTML)
+          is_uuid_category = category.ikea_id.to_s.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) || category.ikea_id.to_s.include?('/')
+          proxy_list = ENV.fetch('PROXY_LIST', '').split(',').map(&:strip).reject(&:empty?)
+          
+          if is_uuid_category && proxy_list.empty?
+            Rails.logger.warn "ParseProductsJob: Skipping UUID category #{category.ikea_id} (#{category.name}) - requires proxy for HTML parsing, but PROXY_LIST is empty"
+            break # Пропускаем категорию без ошибки
+          end
+          
           Rails.logger.info "ParseProductsJob: API returned no products, trying to parse HTML page for category #{category.name}"
           products_data = CategoryProductsFetcher.fetch(
             category.url,
@@ -138,10 +147,20 @@ class ParseProductsJob < ApplicationJob
         break if products_data.length < page_size
         
       rescue => e
-        Rails.logger.error "Error fetching products for category #{category.ikea_id}: #{e.message}"
-        stats[:errors] += 1
-        task.increment_errors!
-        break
+        # Не считаем ошибкой пропуск категорий с UUID при отсутствии прокси
+        error_message = e.message.to_s
+        is_uuid_category = category.ikea_id.to_s.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) || category.ikea_id.to_s.include?('/')
+        is_proxy_error = error_message.include?('403 Forbidden') || error_message.include?('no proxies configured')
+        
+        if is_uuid_category && is_proxy_error
+          Rails.logger.warn "ParseProductsJob: Skipping UUID category #{category.ikea_id} (#{category.name}) - requires proxy: #{error_message}"
+          break # Пропускаем без инкремента ошибок
+        else
+          Rails.logger.error "Error fetching products for category #{category.ikea_id}: #{e.message}"
+          stats[:errors] += 1
+          task.increment_errors!
+          break
+        end
       end
     end
   end

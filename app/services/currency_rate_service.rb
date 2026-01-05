@@ -33,18 +33,53 @@ class CurrencyRateService
   end
   
   # Форматировать курсы для Telegram сообщения
+  # Фильтрует только нужные валюты: PLN, USD, EUR
   def self.format_rates_for_telegram(rates)
     return "Курсы валют не найдены" if rates.empty?
+    
+    # Список нужных валют
+    target_codes = %w[USD EUR]
+    
+    # Фильтруем только нужные валюты
+    filtered_rates = rates[:rates].select { |rate| target_codes.include?(rate[:code]) }
+    
+    # Добавляем PLN как базовую валюту (1.0 PLN)
+    filtered_rates << {
+      currency: 'złoty polski',
+      code: 'PLN',
+      mid: 1.0
+    }
+    
+    # Сортируем: PLN, USD, EUR
+    sorted_rates = filtered_rates.sort_by do |rate|
+      case rate[:code]
+      when 'PLN' then 0
+      when 'USD' then 1
+      when 'EUR' then 2
+      else 3
+      end
+    end
     
     message = "💱 <b>Актуальные курсы валют (NBP)</b>\n\n"
     message += "Дата: #{rates[:effective_date]}\n"
     message += "Таблица: #{rates[:table]}\n\n"
     
-    if rates[:rates].any?
-      rates[:rates].each do |rate|
-        message += "🇪🇺 <b>#{rate[:currency]}</b>\n"
+    if sorted_rates.any?
+      sorted_rates.each do |rate|
+        emoji = case rate[:code]
+                when 'PLN' then '🇵🇱'
+                when 'USD' then '🇺🇸'
+                when 'EUR' then '🇪🇺'
+                else '💱'
+                end
+        
+        message += "#{emoji} <b>#{rate[:currency]}</b>\n"
         message += "   Код: #{rate[:code]}\n"
-        message += "   Курс: #{rate[:mid]} PLN\n\n"
+        if rate[:code] == 'PLN'
+          message += "   Курс: 1.0 PLN (базовая валюта)\n\n"
+        else
+          message += "   Курс: #{rate[:mid]} PLN\n\n"
+        end
       end
     else
       message += "Курсы валют не найдены"

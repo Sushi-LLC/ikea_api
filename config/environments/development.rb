@@ -29,6 +29,9 @@ Rails.application.configure do
 
     config.cache_store = :null_store
   end
+  
+  # Enable serving static files from public/ directory
+  config.public_file_server.enabled = true
 
   # Print deprecation notices to the Rails logger.
   config.active_support.deprecation = :log

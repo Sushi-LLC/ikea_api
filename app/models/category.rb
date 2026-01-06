@@ -65,27 +65,18 @@ class Category < ApplicationRecord
       # Оптимизация: создаем индекс для быстрого поиска дочерних категорий
       children_index = {}
       categories.each do |cat|
-        parent_ids = cat.parent_ids
-        next unless parent_ids.present?
+        parent_ids = normalize_parent_ids(cat.parent_ids)
+        next unless parent_ids.present? && parent_ids.any?
         
-        if parent_ids.is_a?(Array)
-          parent_ids.each do |parent_id|
-            children_index[parent_id] ||= []
-            children_index[parent_id] << cat
-          end
-        elsif parent_ids.is_a?(String)
-          # Если parent_ids строка, пробуем извлечь ID
-          parent_id = parent_ids.split('/').first
-          if parent_id.present?
-            children_index[parent_id] ||= []
-            children_index[parent_id] << cat
-          end
+        parent_ids.each do |parent_id|
+          children_index[parent_id.to_s] ||= []
+          children_index[parent_id.to_s] << cat
         end
       end
       
       # Находим верхнеуровневые категории
       top_level = categories.select do |c|
-        parent_ids = c.parent_ids
+        parent_ids = normalize_parent_ids(c.parent_ids)
         c.is_important || 
         parent_ids.blank? || 
         parent_ids == [] || 
@@ -97,10 +88,31 @@ class Category < ApplicationRecord
 
     private
 
+    def normalize_parent_ids(parent_ids)
+      return [] if parent_ids.blank?
+      
+      # Если это уже массив, возвращаем как есть
+      return parent_ids if parent_ids.is_a?(Array)
+      
+      # Если это строка JSON, парсим
+      if parent_ids.is_a?(String)
+        begin
+          parsed = JSON.parse(parent_ids)
+          return parsed if parsed.is_a?(Array)
+          return [parsed] if parsed.present?
+        rescue JSON::ParserError
+          # Если не JSON, пробуем как простую строку
+          return [parent_ids] if parent_ids.present?
+        end
+      end
+      
+      []
+    end
+
     def build_tree_recursive(parents, children_index)
       parents.map do |parent|
         # Используем индекс для быстрого поиска дочерних категорий
-        children = children_index[parent.ikea_id] || []
+        children = children_index[parent.ikea_id.to_s] || []
         
         {
           category: parent,

@@ -25,9 +25,12 @@ Trestle.resource(:categories, model: Category) do
       
       @categories_tree = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
         categories = Category.all.order(:name).to_a
-        Category.build_tree(categories)
+        tree = Category.build_tree(categories)
+        Rails.logger.info "CategoriesAdmin: Built tree with #{tree.count} top-level categories"
+        tree
       end
       
+      Rails.logger.info "CategoriesAdmin: Rendering tree with #{@categories_tree.count} top-level categories"
       render "trestle/categories/index"
     end
 

@@ -162,7 +162,8 @@
 </style>
 
 <script>
-  function toggleCategory(nodeId) {
+  // Функции должны быть доступны глобально
+  window.toggleCategory = function(nodeId) {
     const children = document.getElementById(`children-${nodeId}`);
     const toggle = document.getElementById(`toggle-${nodeId}`);
     
@@ -172,29 +173,43 @@
         toggle.classList.toggle('expanded');
       }
     }
-  }
+  };
 
-  function expandAll() {
-    document.querySelectorAll('.category-children').forEach(el => {
+  window.expandAll = function() {
+    const children = document.querySelectorAll('.category-children');
+    const toggles = document.querySelectorAll('.category-toggle.has-children');
+    
+    children.forEach(el => {
       el.classList.add('expanded');
     });
-    document.querySelectorAll('.category-toggle.has-children').forEach(el => {
+    toggles.forEach(el => {
       el.classList.add('expanded');
     });
-  }
+    
+    console.log('Expanded all:', children.length, 'categories');
+  };
 
-  function collapseAll() {
-    document.querySelectorAll('.category-children').forEach(el => {
+  window.collapseAll = function() {
+    const children = document.querySelectorAll('.category-children');
+    const toggles = document.querySelectorAll('.category-toggle.has-children');
+    
+    children.forEach(el => {
       el.classList.remove('expanded');
     });
-    document.querySelectorAll('.category-toggle.has-children').forEach(el => {
+    toggles.forEach(el => {
       el.classList.remove('expanded');
     });
-  }
+    
+    console.log('Collapsed all:', children.length, 'categories');
+  };
 
   // Инициализация при загрузке страницы
   document.addEventListener('DOMContentLoaded', function() {
-    // Можно добавить логику для сохранения состояния раскрытия
+    console.log('Categories tree initialized');
+    // Убеждаемся, что функции доступны
+    if (typeof window.expandAll === 'function' && typeof window.collapseAll === 'function') {
+      console.log('Expand/Collapse functions are ready');
+    }
   });
 </script>
 

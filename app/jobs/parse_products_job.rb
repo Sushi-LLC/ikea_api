@@ -101,54 +101,54 @@ class ParseProductsJob < ApplicationJob
       
       begin
         products_data = []
-        api_failed = false
         
-        # Если category_id не UUID, пробуем API поиска
-        unless is_uuid_category
-          begin
-            products_data = IkeaApiService.search_products_by_category(
-              category.ikea_id,
-              offset: offset,
-              limit: page_size
-            )
-            
-            # Если API вернул пустой результат, пробуем HTML парсинг как fallback
-            if products_data.empty? && category.url.present? && retry_count < max_retries
-              Rails.logger.info "ParseProductsJob: API returned no products for category #{category.name} (ID: #{category.ikea_id}), trying HTML parsing as fallback"
-              api_failed = true
-            end
-          rescue => e
-            Rails.logger.warn "ParseProductsJob: API request failed for category #{category.ikea_id}: #{e.message}, trying HTML parsing as fallback"
-            api_failed = true
+        # Для категорий с цифровым кодом используем расширенный поиск
+        if !is_uuid_category
+          # Используем новый сервис с несколькими стратегиями поиска
+          products_data = CategoryProductsSearchService.search(
+            category,
+            offset: offset,
+            limit: page_size,
+            strategies: [
+              :api_by_category_id,      # Сначала пробуем стандартный API
+              :api_alternative_endpoint, # Затем альтернативный endpoint
+              :api_by_category_name,     # Затем поиск по названию
+              :html_parsing              # И наконец HTML парсинг
+            ]
+          )
+          
+          # Если не нашли продукты, пробуем retry
+          if products_data.empty? && retry_count < max_retries
+            retry_count += 1
+            Rails.logger.info "ParseProductsJob: Retry #{retry_count}/#{max_retries} for category #{category.name} with extended search"
+            sleep(2)
+            redo
           end
-        end
-        
-        # Если API не вернул продукты (UUID категория, пустой результат или ошибка), пробуем парсить HTML
-        if (products_data.empty? || api_failed) && category.url.present?
-          begin
-            Rails.logger.info "ParseProductsJob: Trying to parse HTML page for category #{category.name} (URL: #{category.url})"
-            html_products = CategoryProductsFetcher.fetch(
-              category.url,
-              offset: offset,
-              limit: page_size
-            )
-            
-            if html_products.any?
-              products_data = html_products
-              Rails.logger.info "ParseProductsJob: HTML parsing found #{products_data.length} products for category #{category.name}"
-            elsif api_failed && retry_count < max_retries
-              retry_count += 1
-              Rails.logger.info "ParseProductsJob: Retry #{retry_count}/#{max_retries} for category #{category.name}"
-              sleep(2) # Небольшая задержка перед повтором
-              redo
-            end
-          rescue => e
-            Rails.logger.error "ParseProductsJob: HTML parsing failed for category #{category.ikea_id}: #{e.message}"
-            if retry_count < max_retries
-              retry_count += 1
-              Rails.logger.info "ParseProductsJob: Retry #{retry_count}/#{max_retries} for category #{category.name}"
-              sleep(2)
-              redo
+        else
+          # Для UUID категорий используем только HTML парсинг
+          if category.url.present?
+            begin
+              Rails.logger.info "ParseProductsJob: Trying to parse HTML page for UUID category #{category.name} (URL: #{category.url})"
+              products_data = CategoryProductsFetcher.fetch(
+                category.url,
+                offset: offset,
+                limit: page_size
+              )
+              
+              if products_data.empty? && retry_count < max_retries
+                retry_count += 1
+                Rails.logger.info "ParseProductsJob: Retry #{retry_count}/#{max_retries} for UUID category #{category.name}"
+                sleep(2)
+                redo
+              end
+            rescue => e
+              Rails.logger.error "ParseProductsJob: HTML parsing failed for UUID category #{category.ikea_id}: #{e.message}"
+              if retry_count < max_retries
+                retry_count += 1
+                Rails.logger.info "ParseProductsJob: Retry #{retry_count}/#{max_retries} for UUID category #{category.name}"
+                sleep(2)
+                redo
+              end
             end
           end
         end

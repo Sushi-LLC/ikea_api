@@ -38,5 +38,5 @@
 .kamal/secrets
 .env
 
-# Ignore product images (stored elsewhere)
-/public/images/products/
+# Ignore all images (stored elsewhere)
+/public/images/

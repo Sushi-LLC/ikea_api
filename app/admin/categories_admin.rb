@@ -10,6 +10,68 @@ Trestle.resource(:categories, model: Category) do
     scope :active, -> { Category.active }, label: "Активные"
   end
 
+  # Используем кастомный index view с древовидной структурой
+  controller do
+    def index
+      # Кэшируем счетчики продуктов отдельно для быстрого доступа
+      @product_counts = Rails.cache.fetch("categories_product_counts", expires_in: 5.minutes) do
+        Product.group(:category_id).count
+      end
+      
+      # Кэшируем дерево категорий на 5 минут
+      # Ключ кэша включает максимальное время обновления категорий
+      max_updated_at = Category.maximum(:updated_at)
+      cache_key = "categories_tree_#{max_updated_at&.to_i || 0}"
+      
+      @categories_tree = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
+        categories = Category.all.order(:name).to_a
+        Category.build_tree(categories)
+      end
+      
+      render "trestle/categories/index"
+    end
+
+    def show
+      @category = admin.find_instance(params)
+      render "trestle/categories/show"
+    end
+
+    def toggle_active
+      @category = admin.find_instance(params)
+      @category.update(is_deleted: !@category.is_deleted)
+      clear_categories_cache
+      redirect_to admin.categories_path, notice: "Категория #{@category.is_deleted? ? 'отключена' : 'включена'}"
+    end
+
+    def toggle_popular
+      @category = admin.find_instance(params)
+      @category.update(is_popular: !@category.is_popular)
+      clear_categories_cache
+      redirect_to admin.categories_path, notice: "Категория #{@category.is_popular? ? 'добавлена в популярные' : 'удалена из популярных'}"
+    end
+
+    def soft_delete
+      @category = admin.find_instance(params)
+      @category.update(is_deleted: true)
+      clear_categories_cache
+      redirect_to admin.categories_path, notice: "Категория отключена (мягкое удаление)"
+    end
+
+    private
+
+    def clear_categories_cache
+      # Очищаем кэш дерева категорий и счетчиков продуктов
+      Rails.cache.delete_matched("categories_tree_*")
+      Rails.cache.delete("categories_product_counts")
+    end
+  end
+
+  routes do
+    post :toggle_active, on: :member
+    post :toggle_popular, on: :member
+    post :soft_delete, on: :member
+  end
+
   table do
     column :ikea_id
     column :translated_name 
@@ -30,13 +92,6 @@ Trestle.resource(:categories, model: Category) do
     end
     column :created_at, align: :center
     actions
-  end
-
-  controller do
-    def show
-      @category = admin.find_instance(params)
-      render "trestle/categories/show"
-    end
   end
 
   form do |category|

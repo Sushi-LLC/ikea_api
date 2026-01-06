@@ -1,0 +1,200 @@
+<% content_for :page_title do %>
+  Категории
+<% end %>
+
+<div class="categories-tree-container">
+  <div class="tree-controls mb-3">
+    <button type="button" class="btn btn-sm btn-secondary" onclick="expandAll()">
+      <i class="fa fa-plus-circle"></i> Развернуть все
+    </button>
+    <button type="button" class="btn btn-sm btn-secondary" onclick="collapseAll()">
+      <i class="fa fa-minus-circle"></i> Свернуть все
+    </button>
+  </div>
+
+  <div class="categories-tree">
+    <% if @categories_tree.any? %>
+      <%= render partial: 'trestle/categories/category_node', collection: @categories_tree, as: :node %>
+    <% else %>
+      <div class="alert alert-info">Категории не найдены</div>
+    <% end %>
+  </div>
+</div>
+
+<style>
+  .categories-tree-container {
+    padding: 20px;
+  }
+
+  .tree-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .category-node {
+    margin-left: 0;
+    margin-bottom: 5px;
+  }
+
+  .category-item {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    margin-bottom: 5px;
+    transition: background-color 0.2s;
+  }
+
+  .category-item:hover {
+    background-color: #f5f5f5;
+  }
+
+  .category-item.disabled {
+    opacity: 0.6;
+    background-color: #f9f9f9;
+  }
+
+  .category-toggle {
+    cursor: pointer;
+    margin-right: 10px;
+    width: 20px;
+    text-align: center;
+    user-select: none;
+    color: #666;
+  }
+
+  .category-toggle:hover {
+    color: #333;
+  }
+
+  .category-toggle.has-children::before {
+    content: '▶';
+    display: inline-block;
+    transition: transform 0.2s;
+  }
+
+  .category-toggle.has-children.expanded::before {
+    transform: rotate(90deg);
+  }
+
+  .category-toggle.no-children {
+    color: #ccc;
+  }
+
+  .category-info {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+  }
+
+  .category-name {
+    font-weight: 500;
+    color: #333;
+  }
+
+  .category-name.disabled {
+    color: #999;
+    text-decoration: line-through;
+  }
+
+  .category-id {
+    font-size: 0.85em;
+    color: #666;
+    font-family: monospace;
+  }
+
+  .category-badges {
+    display: flex;
+    gap: 5px;
+  }
+
+  .badge {
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.75em;
+  }
+
+  .badge-popular {
+    background-color: #28a745;
+    color: white;
+  }
+
+  .badge-disabled {
+    background-color: #dc3545;
+    color: white;
+  }
+
+  .category-stats {
+    font-size: 0.85em;
+    color: #666;
+  }
+
+  .category-actions {
+    display: flex;
+    gap: 5px;
+    margin-left: auto;
+  }
+
+  .category-actions .btn {
+    padding: 4px 8px;
+    font-size: 0.85em;
+  }
+
+  .category-children {
+    margin-left: 30px;
+    margin-top: 5px;
+    display: none;
+  }
+
+  .category-children.expanded {
+    display: block;
+  }
+
+  .indent-level-1 { margin-left: 30px; }
+  .indent-level-2 { margin-left: 60px; }
+  .indent-level-3 { margin-left: 90px; }
+  .indent-level-4 { margin-left: 120px; }
+  .indent-level-5 { margin-left: 150px; }
+</style>
+
+<script>
+  function toggleCategory(nodeId) {
+    const children = document.getElementById(`children-${nodeId}`);
+    const toggle = document.getElementById(`toggle-${nodeId}`);
+    
+    if (children) {
+      children.classList.toggle('expanded');
+      if (toggle) {
+        toggle.classList.toggle('expanded');
+      }
+    }
+  }
+
+  function expandAll() {
+    document.querySelectorAll('.category-children').forEach(el => {
+      el.classList.add('expanded');
+    });
+    document.querySelectorAll('.category-toggle.has-children').forEach(el => {
+      el.classList.add('expanded');
+    });
+  }
+
+  function collapseAll() {
+    document.querySelectorAll('.category-children').forEach(el => {
+      el.classList.remove('expanded');
+    });
+    document.querySelectorAll('.category-toggle.has-children').forEach(el => {
+      el.classList.remove('expanded');
+    });
+  }
+
+  // Инициализация при загрузке страницы
+  document.addEventListener('DOMContentLoaded', function() {
+    // Можно добавить логику для сохранения состояния раскрытия
+  });
+</script>
+

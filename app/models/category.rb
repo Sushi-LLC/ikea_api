@@ -39,4 +39,74 @@ class Category < ApplicationRecord
     ).where.not(ikea_id: ikea_id) # Исключаем саму категорию
      .count
   end
+
+  # Получить дочерние категории
+  def children
+    return Category.none unless ikea_id.present?
+    
+    Category.where(
+      "parent_ids::text LIKE ? OR parent_ids::text LIKE ?",
+      "%\"#{ikea_id}\"%",
+      "%#{ikea_id}%"
+    ).where.not(ikea_id: ikea_id)
+     .order(:name)
+  end
+
+  # Проверка, является ли категория родительской (имеет дочерние)
+  def has_children?
+    children_count > 0
+  end
+
+  # Класс для построения дерева категорий
+  class << self
+    def build_tree(categories = nil)
+      categories ||= Category.all.order(:name).to_a
+      
+      # Оптимизация: создаем индекс для быстрого поиска дочерних категорий
+      children_index = {}
+      categories.each do |cat|
+        parent_ids = cat.parent_ids
+        next unless parent_ids.present?
+        
+        if parent_ids.is_a?(Array)
+          parent_ids.each do |parent_id|
+            children_index[parent_id] ||= []
+            children_index[parent_id] << cat
+          end
+        elsif parent_ids.is_a?(String)
+          # Если parent_ids строка, пробуем извлечь ID
+          parent_id = parent_ids.split('/').first
+          if parent_id.present?
+            children_index[parent_id] ||= []
+            children_index[parent_id] << cat
+          end
+        end
+      end
+      
+      # Находим верхнеуровневые категории
+      top_level = categories.select do |c|
+        parent_ids = c.parent_ids
+        c.is_important || 
+        parent_ids.blank? || 
+        parent_ids == [] || 
+        (parent_ids.is_a?(Array) && parent_ids.empty?)
+      end
+      
+      build_tree_recursive(top_level, children_index)
+    end
+
+    private
+
+    def build_tree_recursive(parents, children_index)
+      parents.map do |parent|
+        # Используем индекс для быстрого поиска дочерних категорий
+        children = children_index[parent.ikea_id] || []
+        
+        {
+          category: parent,
+          children: build_tree_recursive(children, children_index)
+        }
+      end
+    end
+  end
 end

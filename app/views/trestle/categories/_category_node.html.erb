@@ -1,0 +1,93 @@
+<% category = node[:category] %>
+<% children = node[:children] %>
+<% has_children = children.any? %>
+<% node_id = "node-#{category.ikea_id.to_s.gsub(/[^a-zA-Z0-9]/, '_')}" %>
+
+<div class="category-node" data-category-id="<%= category.ikea_id %>">
+  <div class="category-item <%= 'disabled' if category.is_deleted? %>">
+    <span class="category-toggle <%= has_children ? 'has-children' : 'no-children' %>" 
+          id="toggle-<%= node_id %>"
+          onclick="<%= has_children ? "toggleCategory('#{node_id}')" : '' %>">
+    </span>
+    
+    <div class="category-info">
+      <div class="category-name <%= 'disabled' if category.is_deleted? %>">
+        <%= category.translated_name.presence || category.name %>
+      </div>
+      
+      <div class="category-id">
+        ID: <%= category.ikea_id %>
+      </div>
+      
+      <div class="category-badges">
+        <% if category.is_popular? %>
+          <span class="badge badge-popular">Популярная</span>
+        <% end %>
+        <% if category.is_deleted? %>
+          <span class="badge badge-disabled">Отключена</span>
+        <% end %>
+      </div>
+      
+      <div class="category-stats">
+        <span title="Продуктов">
+          <i class="fa fa-box"></i> <%= @product_counts&.dig(category.ikea_id) || category.products.count %>
+        </span>
+        <% if has_children %>
+          <span title="Дочерних категорий" style="margin-left: 10px;">
+            <i class="fa fa-folder"></i> <%= children.size %>
+          </span>
+        <% end %>
+      </div>
+    </div>
+    
+    <div class="category-actions">
+      <%= link_to categories_admin_path(category.ikea_id), 
+                  class: "btn btn-sm btn-info", 
+                  title: "Просмотр" do %>
+        <i class="fa fa-eye"></i>
+      <% end %>
+      
+      <%= form_with url: toggle_active_categories_admin_path(category.ikea_id), 
+                    method: :post, 
+                    local: true,
+                    class: "d-inline" do |f| %>
+        <%= f.button type: :submit, 
+                     class: "btn btn-sm #{category.is_deleted? ? 'btn-success' : 'btn-warning'}", 
+                     title: category.is_deleted? ? "Включить" : "Отключить" do %>
+          <i class="fa fa-<%= category.is_deleted? ? 'check' : 'times' %>"></i>
+        <% end %>
+      <% end %>
+      
+      <%= form_with url: toggle_popular_categories_admin_path(category.ikea_id), 
+                    method: :post, 
+                    local: true,
+                    class: "d-inline" do |f| %>
+        <%= f.button type: :submit, 
+                     class: "btn btn-sm #{category.is_popular? ? 'btn-warning' : 'btn-secondary'}", 
+                     title: category.is_popular? ? "Убрать из популярных" : "Добавить в популярные" do %>
+          <i class="fa fa-star<%= category.is_popular? ? '' : '-o' %>"></i>
+        <% end %>
+      <% end %>
+      
+      <%= form_with url: soft_delete_categories_admin_path(category.ikea_id), 
+                    method: :post, 
+                    local: true,
+                    data: { confirm: "Вы уверены, что хотите отключить категорию '#{category.name}'?" },
+                    class: "d-inline" do |f| %>
+        <%= f.button type: :submit, 
+                     class: "btn btn-sm btn-danger", 
+                     title: "Мягкое удаление (отключение)",
+                     disabled: category.is_deleted? do %>
+          <i class="fa fa-trash"></i>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+  
+  <% if has_children %>
+    <div class="category-children" id="children-<%= node_id %>">
+      <%= render partial: 'trestle/categories/category_node', collection: children, as: :node %>
+    </div>
+  <% end %>
+</div>
+

@@ -62,7 +62,6 @@ class CurrencyRateService
     
     message = "💱 <b>Актуальные курсы валют (NBP)</b>\n\n"
     message += "Дата: #{rates[:effective_date]}\n"
-    message += "Таблица: #{rates[:table]}\n\n"
     
     if sorted_rates.any?
       sorted_rates.each do |rate|

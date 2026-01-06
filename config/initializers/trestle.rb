@@ -98,6 +98,11 @@ Trestle.configure do |config|
   # config.hook(:stylesheets) do
   #   stylesheet_link_tag "custom"
   # end
+  
+  # Подключаем Font Awesome 6 Free
+  config.hook(:stylesheets) do
+    stylesheet_link_tag "fontawesome/all", media: "all"
+  end
 
   # Specify the parameters that should persist across requests when
   # paginating or reordering. Defaults to [:sort, :order, :scope].

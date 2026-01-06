@@ -22,34 +22,34 @@ class Category < ApplicationRecord
   }
   
   # Подсчет дочерних категорий (категории, у которых текущая категория в parent_ids)
+  # Кэшируем результат для каждой категории
   def children_count
     return 0 unless ikea_id.present?
     
-    # parent_ids хранится в БД как JSON текст (например: '["id1", "id2"]')
-    # После deserialize это массив Ruby
-    # Ищем категории, у которых в parent_ids содержится ikea_id текущей категории
-    
-    # Используем PostgreSQL JSON операторы для поиска в JSON массиве
-    # Вариант 1: JSON содержит элемент (для JSONB)
-    # Вариант 2: LIKE для текстового поиска (для TEXT с JSON)
-    Category.where(
-      "parent_ids::text LIKE ? OR parent_ids::text LIKE ?",
-      "%\"#{ikea_id}\"%",  # JSON массив: ["parent_id"]
-      "%#{ikea_id}%"      # Путь: "parent_id/child_id" или просто строка
-    ).where.not(ikea_id: ikea_id) # Исключаем саму категорию
-     .count
+    Rails.cache.fetch("category_#{ikea_id}_children_count", expires_in: 30.minutes) do
+      # Оптимизированный запрос - используем только COUNT без загрузки записей
+      Category.where(
+        "parent_ids::text LIKE ? OR parent_ids::text LIKE ?",
+        "%\"#{ikea_id}\"%",  # JSON массив: ["parent_id"]
+        "%#{ikea_id}%"      # Путь: "parent_id/child_id" или просто строка
+      ).where.not(ikea_id: ikea_id) # Исключаем саму категорию
+       .count
+    end
   end
 
   # Получить дочерние категории
   def children
     return Category.none unless ikea_id.present?
     
-    Category.where(
-      "parent_ids::text LIKE ? OR parent_ids::text LIKE ?",
-      "%\"#{ikea_id}\"%",
-      "%#{ikea_id}%"
-    ).where.not(ikea_id: ikea_id)
-     .order(:name)
+    # Оптимизированный запрос - загружаем только нужные поля
+    Category.select(:ikea_id, :name, :translated_name, :parent_ids, :is_popular, :is_deleted, :is_important)
+            .where(
+              "parent_ids::text LIKE ? OR parent_ids::text LIKE ?",
+              "%\"#{ikea_id}\"%",
+              "%#{ikea_id}%"
+            )
+            .where.not(ikea_id: ikea_id)
+            .order(:name)
   end
 
   # Проверка, является ли категория родительской (имеет дочерние)
@@ -60,21 +60,26 @@ class Category < ApplicationRecord
   # Класс для построения дерева категорий
   class << self
     def build_tree(categories = nil)
-      categories ||= Category.all.order(:name).to_a
+      categories ||= Category.select(:ikea_id, :name, :translated_name, :parent_ids, :is_popular, :is_deleted, :is_important)
+                             .order(:name)
+                             .to_a
       
       # Оптимизация: создаем индекс для быстрого поиска дочерних категорий
+      # Используем Hash для O(1) поиска
       children_index = {}
       categories.each do |cat|
         parent_ids = normalize_parent_ids(cat.parent_ids)
         next unless parent_ids.present? && parent_ids.any?
         
         parent_ids.each do |parent_id|
-          children_index[parent_id.to_s] ||= []
-          children_index[parent_id.to_s] << cat
+          parent_key = parent_id.to_s
+          children_index[parent_key] ||= []
+          children_index[parent_key] << cat
         end
       end
       
       # Находим верхнеуровневые категории
+      # Оптимизация: используем select вместо select + each для лучшей производительности
       top_level = categories.select do |c|
         parent_ids = normalize_parent_ids(c.parent_ids)
         c.is_important || 

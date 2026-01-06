@@ -13,18 +13,24 @@ Trestle.resource(:categories, model: Category) do
   # Используем кастомный index view с древовидной структурой
   controller do
     def index
-      # Кэшируем счетчики продуктов отдельно для быстрого доступа
-      @product_counts = Rails.cache.fetch("categories_product_counts", expires_in: 5.minutes) do
-        Product.group(:category_id).count
+      # Кэшируем счетчики продуктов отдельно для быстрого доступа (увеличено до 30 минут)
+      @product_counts = Rails.cache.fetch("categories_product_counts", expires_in: 30.minutes) do
+        # Оптимизированный запрос - используем только нужные поля
+        Product.select(:category_id).group(:category_id).count
       end
       
-      # Кэшируем дерево категорий на 5 минут
+      # Кэшируем дерево категорий на 30 минут (увеличено с 5 минут)
       # Ключ кэша включает максимальное время обновления категорий
-      max_updated_at = Category.maximum(:updated_at)
+      max_updated_at = Rails.cache.fetch("categories_max_updated_at", expires_in: 30.minutes) do
+        Category.maximum(:updated_at)
+      end
       cache_key = "categories_tree_#{max_updated_at&.to_i || 0}"
       
-      @categories_tree = Rails.cache.fetch(cache_key, expires_in: 5.minutes) do
-        categories = Category.all.order(:name).to_a
+      @categories_tree = Rails.cache.fetch(cache_key, expires_in: 30.minutes) do
+        # Оптимизированный запрос - загружаем только нужные поля
+        categories = Category.select(:ikea_id, :name, :translated_name, :parent_ids, :is_popular, :is_deleted, :is_important)
+                             .order(:name)
+                             .to_a
         tree = Category.build_tree(categories)
         Rails.logger.info "CategoriesAdmin: Built tree with #{tree.count} top-level categories"
         tree
@@ -66,6 +72,9 @@ Trestle.resource(:categories, model: Category) do
       # Очищаем кэш дерева категорий и счетчиков продуктов
       Rails.cache.delete_matched("categories_tree_*")
       Rails.cache.delete("categories_product_counts")
+      Rails.cache.delete("categories_max_updated_at")
+      # Очищаем кэш счетчиков дочерних категорий
+      Rails.cache.delete_matched("category_*_children_count")
     end
   end
 

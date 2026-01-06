@@ -30,7 +30,7 @@
       
       <div class="category-stats">
         <span title="Продуктов">
-          <i class="fa fa-box"></i> <%= @product_counts&.dig(category.ikea_id) || category.products.count %>
+          <i class="fa fa-box"></i> <%= @product_counts&.dig(category.ikea_id) || 0 %>
         </span>
         <% if has_children %>
           <span title="Дочерних категорий" style="margin-left: 10px;">

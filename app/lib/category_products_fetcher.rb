@@ -25,7 +25,10 @@ class CategoryProductsFetcher
     doc = Nokogiri::HTML(html)
     products = []
     
-    # Ищем JSON данные о продуктах в скриптах страницы
+    Rails.logger.info "CategoryProductsFetcher: Parsing HTML for URL: #{full_url}"
+    Rails.logger.debug "CategoryProductsFetcher: HTML size: #{html.length} bytes"
+    
+    # Стратегия 1: Ищем JSON данные о продуктах в скриптах страницы
     # IKEA обычно хранит данные продуктов в window.__INITIAL_STATE__ или подобных структурах
     doc.css('script').each do |script|
       script_text = script.text
@@ -49,8 +52,11 @@ class CategoryProductsFetcher
             json_str = $1
             begin
               data = JSON.parse(json_str)
-              products.concat(extract_products_from_state(data))
-            rescue JSON::ParserError
+              found = extract_products_from_state(data)
+              products.concat(found)
+              Rails.logger.debug "CategoryProductsFetcher: Found #{found.length} products in __INITIAL_STATE__"
+            rescue JSON::ParserError => e
+              Rails.logger.debug "CategoryProductsFetcher: Failed to parse __INITIAL_STATE__: #{e.message[0..100]}"
               next
             end
           end
@@ -64,20 +70,71 @@ class CategoryProductsFetcher
           if match = script_text.match(/productList.*?(\[.+?\])/m)
             json_str = match[1]
             data = JSON.parse(json_str)
-            products.concat(extract_products_from_array(data))
+            found = extract_products_from_array(data)
+            products.concat(found)
+            Rails.logger.debug "CategoryProductsFetcher: Found #{found.length} products in productList"
           end
-        rescue JSON::ParserError, NoMethodError
+        rescue JSON::ParserError, NoMethodError => e
+          Rails.logger.debug "CategoryProductsFetcher: Failed to parse productList: #{e.message[0..100]}"
           next
+        end
+      end
+      
+      # НОВОЕ: Ищем данные в <script type="application/json">
+      if script['type'] == 'application/json'
+        begin
+          json_data = JSON.parse(script_text)
+          found = extract_products_from_state(json_data)
+          products.concat(found)
+          Rails.logger.debug "CategoryProductsFetcher: Found #{found.length} products in application/json script"
+        rescue JSON::ParserError => e
+          Rails.logger.debug "CategoryProductsFetcher: Failed to parse application/json script: #{e.message[0..100]}"
+        end
+      end
+      
+      # НОВОЕ: Ищем window.__IKEA_PRODUCTS__ или подобные структуры
+      ['__IKEA_PRODUCTS__', '__PRODUCTS__', '__PRODUCT_LIST__', 'productData', 'productsData'].each do |var_name|
+        if script_text.include?(var_name)
+          match = script_text.match(/#{Regexp.escape(var_name)}\s*=\s*({.+?});/m)
+          if match
+            begin
+              json_str = match[1]
+              data = JSON.parse(json_str)
+              found = extract_products_from_state(data)
+              products.concat(found)
+              Rails.logger.debug "CategoryProductsFetcher: Found #{found.length} products in #{var_name}"
+            rescue JSON::ParserError => e
+              Rails.logger.debug "CategoryProductsFetcher: Failed to parse #{var_name}: #{e.message[0..100]}"
+            end
+          end
         end
       end
     end
     
-    # Если не нашли в JSON, пробуем парсить HTML структуру
+    # Стратегия 2: Если не нашли в JSON, пробуем парсить HTML структуру
     if products.empty?
+      Rails.logger.debug "CategoryProductsFetcher: No products found in JSON, trying HTML parsing"
       products = extract_products_from_html(doc)
+    else
+      Rails.logger.info "CategoryProductsFetcher: Found #{products.length} products in JSON data"
     end
     
-    products.uniq { |p| p['sku'] || p[:sku] || p['id'] || p[:id] }
+    # Стратегия 3: НОВОЕ - Ищем продукты в data-атрибутах элементов
+    if products.empty?
+      Rails.logger.debug "CategoryProductsFetcher: No products found in HTML structure, trying data attributes"
+      products = extract_products_from_data_attributes(doc)
+    end
+    
+    # Стратегия 4: НОВОЕ - Ищем ссылки на продукты (паттерн /pl/pl/p/products/...)
+    if products.empty?
+      Rails.logger.debug "CategoryProductsFetcher: No products found, trying product links"
+      products = extract_products_from_links(doc)
+    end
+    
+    unique_products = products.uniq { |p| p['sku'] || p[:sku] || p['id'] || p[:id] }
+    Rails.logger.info "CategoryProductsFetcher: Total unique products found: #{unique_products.length}"
+    
+    unique_products
   end
   
   private
@@ -165,10 +222,26 @@ class CategoryProductsFetcher
     products = []
     
     # Ищем продукты в HTML структуре IKEA
-    doc.css('[data-product-id], [data-item-no], .pip-product-compact, .product-compact').each do |product_element|
+    # Расширенный список селекторов для поиска продуктов
+    selectors = [
+      '[data-product-id]',
+      '[data-item-no]',
+      '[data-sku]',
+      '[data-item-number]',
+      '.pip-product-compact',
+      '.product-compact',
+      '.product-item',
+      '[data-testid*="product"]',
+      '.plp-product-list-item',
+      'article[data-product-id]'
+    ]
+    
+    doc.css(selectors.join(', ')).each do |product_element|
       product_id = product_element['data-product-id'] || 
                    product_element['data-item-no'] ||
-                   product_element['data-sku']
+                   product_element['data-sku'] ||
+                   product_element['data-item-number'] ||
+                   product_element['data-testid']&.gsub(/[^0-9]/, '')
       
       next unless product_id.present?
       
@@ -177,30 +250,111 @@ class CategoryProductsFetcher
       product['id'] = product_id
       product['sku'] = product_id
       
-      # Название
-      name_elem = product_element.css('.pip-product-compact__title, .product-title, h2, h3').first
+      # Название - расширенный поиск
+      name_elem = product_element.css(
+        '.pip-product-compact__title, .product-title, h2, h3, [data-testid*="title"], .product-name, .plp-product-title'
+      ).first
       name = name_elem&.text&.strip
       product['name'] = name
       product['typeName'] = name
       
-      # Цена
-      price_elem = product_element.css('.pip-price, .product-price, [data-price]').first
+      # Цена - расширенный поиск
+      price_elem = product_element.css(
+        '.pip-price, .product-price, [data-price], [data-testid*="price"], .plp-product-price'
+      ).first
       if price_elem
         price_text = price_elem.text.strip.gsub(/[^\d,.]/, '').gsub(',', '.')
         product['salesPrice'] = { 'numeral' => price_text.to_f } if price_text.present?
       end
       
-      # URL
-      link_elem = product_element.css('a').first
-      product['pipUrl'] = link_elem['href'] if link_elem
+      # URL - расширенный поиск
+      link_elem = product_element.css('a[href*="/products/"], a[href*="/p/"]').first
+      if link_elem
+        href = link_elem['href']
+        product['pipUrl'] = href.start_with?('http') ? href : "https://www.ikea.com#{href}"
+      end
       
-      # Изображение
-      img_elem = product_element.css('img').first
-      image_url = img_elem['src'] || img_elem['data-src'] if img_elem
+      # Изображение - расширенный поиск
+      img_elem = product_element.css('img[src*="ikea"], img[data-src*="ikea"], [data-testid*="image"] img').first
+      image_url = img_elem['src'] || img_elem['data-src'] || img_elem['data-lazy-src'] if img_elem
       product['imageUrl'] = image_url
       product['images'] = [image_url].compact if image_url
       
-      products << product
+      products << product if product['id'].present?
+    end
+    
+    products
+  end
+  
+  # НОВОЕ: Извлечение продуктов из data-атрибутов
+  def extract_products_from_data_attributes(doc)
+    products = []
+    
+    # Ищем элементы с data-атрибутами, содержащими информацию о продуктах
+    doc.css('[data-product], [data-item], [data-product-data]').each do |element|
+      # Пробуем извлечь JSON из data-атрибутов
+      ['data-product', 'data-item', 'data-product-data', 'data-product-info'].each do |attr|
+        json_str = element[attr]
+        next unless json_str.present?
+        
+        begin
+          data = JSON.parse(json_str)
+          if data.is_a?(Hash) && (data['id'] || data['sku'] || data['itemNo'])
+            product = {
+              'id' => data['id'] || data['sku'] || data['itemNo'],
+              'sku' => data['sku'] || data['id'] || data['itemNo'],
+              'name' => data['name'] || data['title'],
+              'itemNo' => data['itemNo'] || data['id'],
+              'pipUrl' => data['url'] || data['href'],
+              'salesPrice' => data['price'] ? { 'numeral' => data['price'] } : nil,
+              'imageUrl' => data['image'] || data['imageUrl']
+            }
+            products << product if product['id'].present?
+          end
+        rescue JSON::ParserError
+          next
+        end
+      end
+    end
+    
+    products
+  end
+  
+  # НОВОЕ: Извлечение продуктов из ссылок на страницы продуктов
+  def extract_products_from_links(doc)
+    products = []
+    
+    # Ищем ссылки на страницы продуктов (паттерн /pl/pl/p/products/... или /pl/pl/products/...)
+    doc.css('a[href*="/products/"], a[href*="/p/products/"]').each do |link|
+      href = link['href']
+      next unless href.present?
+      
+      # Извлекаем SKU из URL (обычно в конце URL)
+      # Пример: /pl/pl/p/products/hemnes-00369474/
+      match = href.match(%r{/products/([^/]+)/?$})
+      if match
+        sku = match[1]
+        # Пробуем извлечь числовой ID из SKU
+        item_no = sku.match(/(\d+)$/)&.[](1)
+        
+        product = {
+          'id' => item_no || sku,
+          'sku' => item_no || sku,
+          'itemNo' => item_no,
+          'name' => link.text.strip,
+          'pipUrl' => href.start_with?('http') ? href : "https://www.ikea.com#{href}"
+        }
+        
+        # Пробуем найти цену рядом со ссылкой
+        parent = link.parent || link
+        price_elem = parent.css('.price, [data-price], .product-price').first
+        if price_elem
+          price_text = price_elem.text.strip.gsub(/[^\d,.]/, '').gsub(',', '.')
+          product['salesPrice'] = { 'numeral' => price_text.to_f } if price_text.present?
+        end
+        
+        products << product if product['id'].present?
+      end
     end
     
     products

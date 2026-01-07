@@ -6,7 +6,8 @@ class CategoryProductsSearchService
     :api_by_category_name,     # 2. API поиск по названию категории
     :html_parsing,             # 3. HTML парсинг страницы категории
     :html_with_js_rendering,   # 4. HTML парсинг с ожиданием JS (если нужно)
-    :api_alternative_endpoint  # 5. Альтернативный API endpoint (если есть)
+    :api_alternative_endpoint, # 5. Альтернативный API endpoint (если есть)
+    :children_categories       # 6. Поиск продуктов через дочерние категории
   ].freeze
 
   def self.search(category, offset: 0, limit: 50, strategies: STRATEGIES)
@@ -16,7 +17,8 @@ class CategoryProductsSearchService
   # Определяет оптимальный порядок стратегий на основе анализа категорий без продуктов
   # Приоритет 1: HTML парсинг (все категории имеют URL)
   # Приоритет 2: API по ID (для числовых ID)
-  # Приоритет 3: API по названию (fallback)
+  # Приоритет 3: Поиск через дочерние категории (если есть дети)
+  # Приоритет 4: API по названию (fallback)
   def self.optimal_strategies_for_category(category)
     strategies = []
     
@@ -28,13 +30,17 @@ class CategoryProductsSearchService
       strategies << :api_by_category_id
       # Приоритет 3: Альтернативный endpoint
       strategies << :api_alternative_endpoint
-      # Приоритет 4: API по названию (fallback)
+      # Приоритет 4: Поиск через дочерние категории (если есть дети)
+      strategies << :children_categories if category.has_children?
+      # Приоритет 5: API по названию (fallback)
       strategies << :api_by_category_name if category.name.present?
     else
       # Для категорий с UUID или другими форматами
       # Приоритет 1: HTML парсинг
       strategies << :html_parsing if category.url.present?
-      # Приоритет 2: API по названию
+      # Приоритет 2: Поиск через дочерние категории (если есть дети)
+      strategies << :children_categories if category.has_children?
+      # Приоритет 3: API по названию
       strategies << :api_by_category_name if category.name.present?
     end
     
@@ -63,6 +69,8 @@ class CategoryProductsSearchService
           results = try_html_with_js_rendering(category, offset, limit)
         when :api_alternative_endpoint
           results = try_api_alternative_endpoint(category, offset, limit)
+        when :children_categories
+          results = try_children_categories(category, offset, limit)
         end
 
         if results.any?
@@ -158,6 +166,50 @@ class CategoryProductsSearchService
   rescue => e
     Rails.logger.warn "CategoryProductsSearchService.try_html_parsing failed: #{e.message}"
     []
+  end
+
+  # Стратегия 6: Поиск продуктов через дочерние категории
+  def try_children_categories(category, offset, limit)
+    return [] unless category.has_children?
+    
+    Rails.logger.info "CategoryProductsSearchService: Searching products in children categories for #{category.ikea_id}"
+    
+    products = []
+    children = category.children.limit(10) # Ограничиваем для производительности
+    
+    children.each do |child|
+      # Рекурсивно ищем продукты в дочерних категориях
+      child_products = child.products.limit(limit).offset(offset).to_a
+      products.concat(child_products.map { |p| product_to_hash(p) })
+      
+      # Если у дочерней категории тоже есть дети, рекурсивно ищем
+      if child.has_children?
+        child.children.limit(5).each do |grandchild|
+          grandchild_products = grandchild.products.limit(limit).offset(offset).to_a
+          products.concat(grandchild_products.map { |p| product_to_hash(p) })
+        end
+      end
+    end
+    
+    products.uniq { |p| p['sku'] || p[:sku] || p['id'] || p[:id] }
+  rescue => e
+    Rails.logger.warn "CategoryProductsSearchService.try_children_categories failed: #{e.message}"
+    []
+  end
+
+  def product_to_hash(product)
+    {
+      'id' => product.sku,
+      'sku' => product.sku,
+      'itemNo' => product.item_no,
+      'itemNoGlobal' => product.item_no,
+      'name' => product.name,
+      'typeName' => product.name,
+      'pipUrl' => product.url,
+      'salesPrice' => product.price ? { 'numeral' => product.price } : nil,
+      'imageUrl' => product.images&.first,
+      'images' => product.images || []
+    }
   end
 
   # Стратегия 4: HTML парсинг с ожиданием JS рендеринга (если нужно)

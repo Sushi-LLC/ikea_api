@@ -13,6 +13,35 @@ class CategoryProductsSearchService
     new.search(category, offset: offset, limit: limit, strategies: strategies)
   end
 
+  # Определяет оптимальный порядок стратегий на основе анализа категорий без продуктов
+  # Приоритет 1: HTML парсинг (все категории имеют URL)
+  # Приоритет 2: API по ID (для числовых ID)
+  # Приоритет 3: API по названию (fallback)
+  def self.optimal_strategies_for_category(category)
+    strategies = []
+    
+    # Для категорий с числовыми ID
+    if category.numeric_id?
+      # Приоритет 1: HTML парсинг (все категории без продуктов имеют URL)
+      strategies << :html_parsing if category.url.present?
+      # Приоритет 2: API по ID
+      strategies << :api_by_category_id
+      # Приоритет 3: Альтернативный endpoint
+      strategies << :api_alternative_endpoint
+      # Приоритет 4: API по названию (fallback)
+      strategies << :api_by_category_name if category.name.present?
+    else
+      # Для категорий с UUID или другими форматами
+      # Приоритет 1: HTML парсинг
+      strategies << :html_parsing if category.url.present?
+      # Приоритет 2: API по названию
+      strategies << :api_by_category_name if category.name.present?
+    end
+    
+    # Если стратегии не определены, используем все доступные
+    strategies.any? ? strategies : STRATEGIES
+  end
+
   def search(category, offset: 0, limit: 50, strategies: STRATEGIES)
     results = []
     tried_strategies = []
@@ -37,11 +66,16 @@ class CategoryProductsSearchService
         end
 
         if results.any?
-          Rails.logger.info "CategoryProductsSearchService: Strategy #{strategy} found #{results.length} products for category #{category.ikea_id}"
+          Rails.logger.info "CategoryProductsSearchService: Strategy #{strategy} found #{results.length} products for category #{category.ikea_id} (#{category.name})"
+          
+          # Логируем метрику успешной стратегии
+          Rails.logger.info "CategoryProductsSearchService: Success metrics - category_id: #{category.ikea_id}, strategy: #{strategy}, products_count: #{results.length}, has_url: #{category.url.present?}, numeric_id: #{category.numeric_id?}"
+          
           return results
         end
 
         tried_strategies << strategy
+        Rails.logger.debug "CategoryProductsSearchService: Strategy #{strategy} returned no products for category #{category.ikea_id}, trying next strategy"
       rescue => e
         Rails.logger.warn "CategoryProductsSearchService: Strategy #{strategy} failed for category #{category.ikea_id}: #{e.message}"
         tried_strategies << strategy

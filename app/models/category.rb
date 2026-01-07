@@ -57,6 +57,21 @@ class Category < ApplicationRecord
     children_count > 0
   end
 
+  # Проверка наличия продуктов в категории
+  def has_products?
+    products.exists?
+  end
+
+  # Проверка, является ли ID категории числовым
+  def numeric_id?
+    ikea_id.to_s.match?(/^\d+$/)
+  end
+
+  # Проверка, является ли ID категории UUID
+  def uuid_id?
+    ikea_id.to_s.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+  end
+
   # Класс для построения дерева категорий
   class << self
     def build_tree(categories = nil)

@@ -87,12 +87,14 @@ class ParseProductsJob < ApplicationJob
     
     Rails.logger.info "ParseProductsJob: Starting to fetch products for category #{category.ikea_id} (#{category.name})"
     
-    is_uuid_category = category.ikea_id.to_s.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i) || category.ikea_id.to_s.include?('/')
+    # Проверяем, есть ли уже продукты в категории
+    has_existing_products = category.has_products?
+    is_uuid_category = category.uuid_id? || category.ikea_id.to_s.include?('/')
     proxy_list = ENV.fetch('PROXY_LIST', '').split(',').map(&:strip).reject(&:empty?)
     
     # Проверяем возможность обработки UUID категорий
-    if is_uuid_category && proxy_list.empty?
-      Rails.logger.warn "ParseProductsJob: Skipping UUID category #{category.ikea_id} (#{category.name}) - requires proxy for HTML parsing, but PROXY_LIST is empty"
+    if is_uuid_category && proxy_list.empty? && !category.url.present?
+      Rails.logger.warn "ParseProductsJob: Skipping UUID category #{category.ikea_id} (#{category.name}) - requires proxy for HTML parsing, but PROXY_LIST is empty and no URL"
       return # Пропускаем категорию без ошибки
     end
     
@@ -102,63 +104,69 @@ class ParseProductsJob < ApplicationJob
       begin
         products_data = []
         
-        # Для категорий с цифровым кодом используем расширенный поиск
-        if !is_uuid_category
-          # Используем новый сервис с несколькими стратегиями поиска
-          products_data = CategoryProductsSearchService.search(
-            category,
-            offset: offset,
-            limit: page_size,
-            strategies: [
-              :api_by_category_id,      # Сначала пробуем стандартный API
-              :api_alternative_endpoint, # Затем альтернативный endpoint
-              :api_by_category_name,     # Затем поиск по названию
-              :html_parsing              # И наконец HTML парсинг
-            ]
-          )
-          
-          # Если не нашли продукты, пробуем retry
-          if products_data.empty? && retry_count < max_retries
-            retry_count += 1
-            Rails.logger.info "ParseProductsJob: Retry #{retry_count}/#{max_retries} for category #{category.name} with extended search"
-            sleep(2)
-            redo
-          end
-        else
-          # Для UUID категорий используем только HTML парсинг
-          if category.url.present?
-            begin
-              Rails.logger.info "ParseProductsJob: Trying to parse HTML page for UUID category #{category.name} (URL: #{category.url})"
+        # Определяем оптимальные стратегии на основе анализа категорий без продуктов
+        # Для категорий без продуктов: приоритет HTML парсинга (все имеют URL)
+        # Для категорий с продуктами: используем стандартный порядок
+        if has_existing_products
+          # Для категорий с существующими продуктами используем стандартный порядок
+          # (обратная совместимость)
+          if !is_uuid_category
+            products_data = CategoryProductsSearchService.search(
+              category,
+              offset: offset,
+              limit: page_size,
+              strategies: [
+                :api_by_category_id,      # Сначала пробуем стандартный API
+                :api_alternative_endpoint, # Затем альтернативный endpoint
+                :api_by_category_name,     # Затем поиск по названию
+                :html_parsing              # И наконец HTML парсинг
+              ]
+            )
+          else
+            # Для UUID категорий используем только HTML парсинг
+            if category.url.present?
               products_data = CategoryProductsFetcher.fetch(
                 category.url,
                 offset: offset,
                 limit: page_size
               )
-              
-              if products_data.empty? && retry_count < max_retries
-                retry_count += 1
-                Rails.logger.info "ParseProductsJob: Retry #{retry_count}/#{max_retries} for UUID category #{category.name}"
-                sleep(2)
-                redo
-              end
-            rescue => e
-              Rails.logger.error "ParseProductsJob: HTML parsing failed for UUID category #{category.ikea_id}: #{e.message}"
-              if retry_count < max_retries
-                retry_count += 1
-                Rails.logger.info "ParseProductsJob: Retry #{retry_count}/#{max_retries} for UUID category #{category.name}"
-                sleep(2)
-                redo
-              end
             end
           end
+        else
+          # Для категорий БЕЗ продуктов используем оптимизированный порядок стратегий
+          # на основе анализа: HTML парсинг приоритет 1 (все категории имеют URL)
+          optimal_strategies = CategoryProductsSearchService.optimal_strategies_for_category(category)
+          
+          Rails.logger.info "ParseProductsJob: Category #{category.ikea_id} has no products, using optimized strategies: #{optimal_strategies.join(', ')}"
+          
+          products_data = CategoryProductsSearchService.search(
+            category,
+            offset: offset,
+            limit: page_size,
+            strategies: optimal_strategies
+          )
+        end
+        
+        # Если не нашли продукты, пробуем retry
+        if products_data.empty? && retry_count < max_retries
+          retry_count += 1
+          Rails.logger.info "ParseProductsJob: Retry #{retry_count}/#{max_retries} for category #{category.name}"
+          sleep(2)
+          redo
         end
         
         Rails.logger.info "ParseProductsJob: Fetched #{products_data.length} products for category #{category.name} (ID: #{category.ikea_id}, offset: #{offset})"
+        
+        # Логируем метрики для категорий без продуктов
+        if !has_existing_products && products_data.any?
+          Rails.logger.info "ParseProductsJob: SUCCESS - Found #{products_data.length} products for previously empty category #{category.ikea_id} (#{category.name})"
+        end
         
         # Если не нашли продукты после всех попыток, логируем и выходим
         if products_data.empty?
           if offset == 0
             Rails.logger.warn "ParseProductsJob: No products found for category #{category.name} (ID: #{category.ikea_id}) after all attempts"
+            Rails.logger.warn "ParseProductsJob: Category details - has_url: #{category.url.present?}, numeric_id: #{category.numeric_id?}, uuid_id: #{category.uuid_id?}"
           end
           break
         end

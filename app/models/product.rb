@@ -4,7 +4,13 @@ class Product < ApplicationRecord
   validates :name, presence: true
   
   # Ассоциации
+  # Старая связь (для обратной совместимости, будет удалена после миграции)
   belongs_to :category, foreign_key: :category_id, primary_key: :ikea_id, optional: true
+  
+  # Новая связь many-to-many
+  has_many :category_products, dependent: :destroy
+  has_many :categories, through: :category_products, source: :category
+  
   has_many :product_filter_values
   has_many :filter_values, through: :product_filter_values
   

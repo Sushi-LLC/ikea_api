@@ -4,13 +4,20 @@ class Category < ApplicationRecord
   validates :ikea_id, presence: true, uniqueness: true
   validates :name, presence: true
   
+  # Старая связь (для обратной совместимости, будет удалена после миграции)
   has_many :products, foreign_key: :category_id, primary_key: :ikea_id
+  
+  # Новая связь many-to-many
+  has_many :category_products, foreign_key: :category_id, primary_key: :ikea_id, dependent: :destroy
+  has_many :products_through_categories, through: :category_products, source: :product
   
   serialize :parent_ids, coder: JSON
   
   scope :popular, -> { where(is_popular: true) }
   scope :active, -> { where(is_deleted: [false, nil]) }
   scope :not_deleted, -> { where(is_deleted: [false, nil]) }
+  # Категории с цифровым кодом (ikea_id состоит только из цифр)
+  scope :with_numeric_id, -> { where("ikea_id ~ '^[0-9]+$'") }
   # Верхнеуровневые категории (без родительских категорий)
   # Используем поле is_important для определения верхнеуровневых категорий
   # Также проверяем parent_ids на nil или пустой массив для совместимости
@@ -83,7 +90,7 @@ class Category < ApplicationRecord
       # Используем Hash для O(1) поиска
       children_index = {}
       categories.each do |cat|
-        parent_ids = normalize_parent_ids(cat.parent_ids)
+        parent_ids = self.normalize_parent_ids(cat.parent_ids)
         next unless parent_ids.present? && parent_ids.any?
         
         parent_ids.each do |parent_id|
@@ -96,7 +103,7 @@ class Category < ApplicationRecord
       # Находим верхнеуровневые категории
       # Оптимизация: используем select вместо select + each для лучшей производительности
       top_level = categories.select do |c|
-        parent_ids = normalize_parent_ids(c.parent_ids)
+        parent_ids = self.normalize_parent_ids(c.parent_ids)
         c.is_important || 
         parent_ids.blank? || 
         parent_ids == [] || 
@@ -106,8 +113,7 @@ class Category < ApplicationRecord
       build_tree_recursive(top_level, children_index)
     end
 
-    private
-
+    # Публичный метод для нормализации parent_ids (используется в контроллерах)
     def normalize_parent_ids(parent_ids)
       return [] if parent_ids.blank?
       
@@ -128,6 +134,8 @@ class Category < ApplicationRecord
       
       []
     end
+
+    private
 
     def build_tree_recursive(parents, children_index)
       parents.map do |parent|

@@ -94,6 +94,20 @@ class ParseCategoriesJob < ApplicationJob
       ikea_id = node['id'] || node['categoryId']
       next unless ikea_id
       
+      category_url = node['url'] || node['categoryUrl'] || ''
+      
+      # ФИЛЬТРАЦИЯ: Пропускаем служебные категории
+      if should_skip_category?(ikea_id, category_url)
+        Rails.logger.debug "ParseCategoriesJob: Skipping service category #{ikea_id} (#{node['name'] || node['categoryName']})"
+        # Рекурсивно обрабатываем дочерние категории, даже если родительская служебная
+        children = node['subs'] || node['children']
+        if children && children.any?
+          new_parent_ids = parent_ids + [ikea_id]
+          process_category_tree(children, task, stats, limit, parent_ids: new_parent_ids)
+        end
+        next
+      end
+      
       category = Category.find_or_initialize_by(ikea_id: ikea_id)
       
       category_name = node['name'] || node['categoryName']
@@ -118,7 +132,7 @@ class ParseCategoriesJob < ApplicationJob
       category.assign_attributes(
         name: category_name,
         translated_name: translated_name,
-        url: node['url'] || node['categoryUrl'],
+        url: category_url,
         remote_image_url: node['im'] || node['imageUrl'] || node['remoteImageUrl'],
         parent_ids: parent_ids,
         is_deleted: false,
@@ -145,6 +159,33 @@ class ParseCategoriesJob < ApplicationJob
         process_category_tree(children, task, stats, limit, parent_ids: new_parent_ids)
       end
     end
+  end
+  
+  # Проверка, является ли категория служебной (нужно пропустить)
+  def should_skip_category?(ikea_id, url)
+    return false if url.blank?
+    
+    url_str = url.to_s.downcase
+    
+    # 1. Категории с фильтрами в URL (lower-price/?filters=...)
+    return true if url_str.include?('filters=') || url_str.include?('filter=')
+    
+    # 2. Ссылки на гайды и руководства
+    return true if url_str.include?('/product-guides/') || 
+                   url_str.include?('/how-to/') || 
+                   url_str.include?('/rooms/') && url_str.include?('/how-to/')
+    
+    # 3. Категории с UUID в ID, которые содержат "/" (специальные фильтры)
+    if ikea_id.to_s.include?('/')
+      # Проверяем, не является ли это обычной категорией с путем
+      # Если URL содержит filters или это не обычный путь категории - пропускаем
+      return true if url_str.include?('filters=') || url_str.include?('filter=')
+    end
+    
+    # 4. Категории с паттерном lower-price (специальные фильтры)
+    return true if url_str.include?('lower-price')
+    
+    false
   end
 end
 

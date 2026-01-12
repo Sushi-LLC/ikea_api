@@ -188,6 +188,8 @@ class IkeaApiService
     
     products = items.select { |item| item['type'] == 'PRODUCT' }
                    .map { |item| item['product'] }
+                   .compact
+                   .map { |product| ensure_price_in_product(product) }
     
     Rails.logger.info "IkeaApiService.search_products_by_category: Extracted #{products.length} products"
     products
@@ -271,6 +273,24 @@ class IkeaApiService
     
     Rails.logger.info "IkeaApiService.parse_availability_response: Parsed #{result.length} items from #{availabilities.length} availabilities"
     result
+  end
+  
+  # Убеждаемся, что цена присутствует в продукте (ОБЯЗАТЕЛЬНОЕ ПОЛЕ)
+  def self.ensure_price_in_product(product)
+    return product unless product.is_a?(Hash)
+    
+    # Проверяем наличие цены в разных форматах
+    price = product.dig('salesPrice', 'numeral') ||
+            product.dig('price', 'numeral') ||
+            product['price'] ||
+            product[:price]
+    
+    # Если цена не найдена, логируем предупреждение
+    if price.blank? || price.to_f == 0
+      Rails.logger.warn "IkeaApiService: Product #{product['id'] || product[:id]} has no price in API response"
+    end
+    
+    product
   end
 end
 

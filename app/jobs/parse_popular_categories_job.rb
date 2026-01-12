@@ -27,13 +27,15 @@ class ParsePopularCategoriesJob < ApplicationJob
       Rails.logger.info "ParsePopularCategoriesJob: Fetching popular categories from homepage via scrape.do"
       homepage_data = HomepageFetcher.fetch
       popular_category_ids = homepage_data[:popular_category_ids] || []
+      popular_category_urls = homepage_data[:popular_category_urls] || {}
       
       # Если не получилось с главной страницы, используем старый метод
       if popular_category_ids.empty?
         Rails.logger.info "ParsePopularCategoriesJob: No popular categories from homepage, trying PopularCategoriesFetcher"
         popular_category_ids = PopularCategoriesFetcher.fetch
+        popular_category_urls = {}
       else
-        Rails.logger.info "ParsePopularCategoriesJob: Found #{popular_category_ids.length} popular categories from homepage"
+        Rails.logger.info "ParsePopularCategoriesJob: Found #{popular_category_ids.length} popular categories from homepage (#{popular_category_urls.length} with URLs/names)"
       end
       
       if popular_category_ids.empty?
@@ -49,7 +51,7 @@ class ParsePopularCategoriesJob < ApplicationJob
         end
       else
         # Обновляем флаги is_popular для найденных категорий
-        process_popular_category_ids(popular_category_ids, task, stats, limit)
+        process_popular_category_ids(popular_category_ids, popular_category_urls, task, stats, limit)
       end
       
       task.mark_as_completed!(stats)
@@ -82,9 +84,12 @@ class ParsePopularCategoriesJob < ApplicationJob
 
   private
 
-  def process_popular_category_ids(category_ids, task, stats, limit)
+  def process_popular_category_ids(category_ids, popular_category_urls, task, stats, limit)
     Rails.logger.info "ParsePopularCategoriesJob: Processing #{category_ids.length} popular category IDs"
     Rails.logger.info "ParsePopularCategoriesJob: First 10 IDs: #{category_ids.first(10).inspect}"
+    if popular_category_urls.any?
+      Rails.logger.info "ParsePopularCategoriesJob: Have URLs/names for #{popular_category_urls.length} categories"
+    end
     
     # Сначала сбрасываем все флаги is_popular
     Category.update_all(is_popular: false)
@@ -101,6 +106,9 @@ class ParsePopularCategoriesJob < ApplicationJob
         
         # Нормализуем ID (убираем лишние символы, пробелы)
         normalized_id = category_id.to_s.strip
+        category_info = popular_category_urls[category_id] || popular_category_urls[normalized_id] || {}
+        category_url = category_info[:url] || normalized_id
+        category_name = category_info[:name]
         
         # Пробуем найти категорию по разным вариантам ID
         # 1. Точное совпадение
@@ -121,10 +129,15 @@ class ParsePopularCategoriesJob < ApplicationJob
           category ||= Category.where("ikea_id LIKE ?", "%#{normalized_id.gsub('-', '')}%").first
           
           # Поиск по URL (если это полный URL или slug категории)
+          url_to_search = nil
           if normalized_id.start_with?('http') || normalized_id.start_with?('/')
             # Это полный URL или путь
             url_to_search = normalized_id.start_with?('http') ? normalized_id : "https://www.ikea.com#{normalized_id}"
-            
+          elsif category_url && (category_url.start_with?('http') || category_url.start_with?('/'))
+            url_to_search = category_url.start_with?('http') ? category_url : "https://www.ikea.com#{category_url}"
+          end
+          
+          if url_to_search
             # Пробуем найти по части URL (slug)
             if url_to_search.include?('/cat/')
               slug = url_to_search.split('/cat/').last.split('/').first
@@ -159,11 +172,20 @@ class ParsePopularCategoriesJob < ApplicationJob
           stats[:updated] += 1
           task.increment_updated!
           found_count += 1
-          Rails.logger.info "ParsePopularCategoriesJob: Marked category #{category.name} (ID: #{category.ikea_id}) as popular (found by: #{normalized_id})"
+          log_name = category_name || category.name
+          log_url = category_url && category_url != normalized_id ? " (URL: #{category_url})" : ""
+          Rails.logger.info "ParsePopularCategoriesJob: Marked category #{log_name} (ID: #{category.ikea_id}) as popular (found by: #{normalized_id})#{log_url}"
         end
       else
-        not_found_ids << normalized_id
-        Rails.logger.debug "ParsePopularCategoriesJob: Category with ID '#{normalized_id}' not found in database"
+        not_found_ids << {
+          id: normalized_id,
+          name: category_name,
+          url: category_url
+        }
+        log_msg = "ParsePopularCategoriesJob: Category with ID '#{normalized_id}' not found in database"
+        log_msg += " - Name: #{category_name}" if category_name
+        log_msg += " - URL: #{category_url}" if category_url && category_url != normalized_id
+        Rails.logger.debug log_msg
       end
       
       stats[:processed] += 1
@@ -172,7 +194,11 @@ class ParsePopularCategoriesJob < ApplicationJob
     
     Rails.logger.info "ParsePopularCategoriesJob: Found #{found_count} categories, #{not_found_ids.length} not found"
     if not_found_ids.length > 0 && not_found_ids.length <= 20
-      Rails.logger.warn "ParsePopularCategoriesJob: Not found IDs (first 20): #{not_found_ids.first(20).inspect}"
+      Rails.logger.warn "ParsePopularCategoriesJob: Not found IDs (first 20): #{not_found_ids.first(20).map { |n| n[:id] }.inspect}"
+      # Логируем детали для первых 5 не найденных
+      not_found_ids.first(5).each do |not_found|
+        Rails.logger.warn "ParsePopularCategoriesJob: Not found details - ID: #{not_found[:id]}, Name: #{not_found[:name] || 'N/A'}, URL: #{not_found[:url] || 'N/A'}"
+      end
     end
   end
   

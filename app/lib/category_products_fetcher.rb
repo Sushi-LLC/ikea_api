@@ -258,13 +258,26 @@ class CategoryProductsFetcher
       product['name'] = name
       product['typeName'] = name
       
-      # Цена - расширенный поиск
+      # Цена - расширенный поиск (ОБЯЗАТЕЛЬНОЕ ПОЛЕ)
       price_elem = product_element.css(
-        '.pip-price, .product-price, [data-price], [data-testid*="price"], .plp-product-price'
+        '.pip-price, .product-price, [data-price], [data-testid*="price"], .plp-product-price, .price, [data-testid="price"]'
       ).first
       if price_elem
         price_text = price_elem.text.strip.gsub(/[^\d,.]/, '').gsub(',', '.')
-        product['salesPrice'] = { 'numeral' => price_text.to_f } if price_text.present?
+        if price_text.present?
+          product['salesPrice'] = { 'numeral' => price_text.to_f }
+          product['price'] = price_text.to_f
+        end
+      else
+        # Пробуем найти цену в data-атрибутах
+        price_attr = product_element['data-price'] || product_element['data-sales-price']
+        if price_attr.present?
+          price_value = price_attr.to_s.gsub(/[^\d,.]/, '').gsub(',', '.').to_f
+          if price_value > 0
+            product['salesPrice'] = { 'numeral' => price_value }
+            product['price'] = price_value
+          end
+        end
       end
       
       # URL - расширенный поиск
@@ -279,6 +292,48 @@ class CategoryProductsFetcher
       image_url = img_elem['src'] || img_elem['data-src'] || img_elem['data-lazy-src'] if img_elem
       product['imageUrl'] = image_url
       product['images'] = [image_url].compact if image_url
+      
+      # Количество/наличие - расширенный поиск (ОБЯЗАТЕЛЬНОЕ ПОЛЕ)
+      quantity_elem = product_element.css(
+        '[data-stock], [data-quantity], [data-availability], .stock, .availability, [data-testid*="stock"], [data-testid*="availability"]'
+      ).first
+      
+      if quantity_elem
+        # Пробуем извлечь из data-атрибутов
+        quantity_attr = quantity_elem['data-stock'] || quantity_elem['data-quantity'] || quantity_elem['data-availability']
+        if quantity_attr.present?
+          quantity_value = quantity_attr.to_s.gsub(/[^\d]/, '').to_i
+          if quantity_value > 0
+            product['quantity'] = quantity_value
+            product['availability'] = [{ 'quantity' => quantity_value }]
+          end
+        else
+          # Пробуем извлечь из текста
+          quantity_text = quantity_elem.text.strip
+          if quantity_text.match?(/\d+/)
+            quantity_value = quantity_text.gsub(/[^\d]/, '').to_i
+            if quantity_value > 0
+              product['quantity'] = quantity_value
+              product['availability'] = [{ 'quantity' => quantity_value }]
+            end
+          end
+        end
+      end
+      
+      # Если количество не найдено, пробуем определить по статусу наличия
+      if product['quantity'].blank?
+        in_stock_elem = product_element.css('[data-in-stock], .in-stock, [class*="available"], [class*="stock"]').first
+        if in_stock_elem
+          stock_text = in_stock_elem.text.downcase || in_stock_elem['class'].to_s.downcase
+          if stock_text.include?('dostępn') || stock_text.include?('in stock') || stock_text.include?('available')
+            product['quantity'] = 999 # Высокий запас
+            product['availability'] = [{ 'status' => 'HIGH_IN_STOCK', 'quantity' => 999 }]
+          elsif stock_text.include?('brak') || stock_text.include?('out of stock') || stock_text.include?('unavailable')
+            product['quantity'] = 0
+            product['availability'] = [{ 'status' => 'OUT_OF_STOCK', 'quantity' => 0 }]
+          end
+        end
+      end
       
       products << product if product['id'].present?
     end

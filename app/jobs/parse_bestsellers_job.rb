@@ -27,13 +27,17 @@ class ParseBestsellersJob < ApplicationJob
       Rails.logger.info "ParseBestsellersJob: Fetching bestsellers from homepage via scrape.do"
       homepage_data = HomepageFetcher.fetch
       bestseller_skus = homepage_data[:bestseller_skus] || []
+      bestseller_urls = homepage_data[:bestseller_urls] || {}
+      bestseller_names = homepage_data[:bestseller_names] || {}
       
       # Если не получилось с главной страницы, используем старый метод
       if bestseller_skus.empty?
         Rails.logger.info "ParseBestsellersJob: No bestsellers from homepage, trying BestsellersFetcher"
         bestseller_skus = BestsellersFetcher.fetch(limit: limit || 1000)
+        bestseller_urls = {}
+        bestseller_names = {}
       else
-        Rails.logger.info "ParseBestsellersJob: Found #{bestseller_skus.length} bestsellers from homepage"
+        Rails.logger.info "ParseBestsellersJob: Found #{bestseller_skus.length} bestsellers from homepage (#{bestseller_urls.length} with URLs, #{bestseller_names.length} with names)"
       end
       
       if bestseller_skus.empty?
@@ -47,7 +51,7 @@ class ParseBestsellersJob < ApplicationJob
         end
       else
         # Обновляем флаги is_bestseller для найденных продуктов
-        process_bestseller_skus(bestseller_skus, task, stats, limit)
+        process_bestseller_skus(bestseller_skus, bestseller_urls, bestseller_names, task, stats, limit)
       end
       
       task.mark_as_completed!(stats)
@@ -80,9 +84,15 @@ class ParseBestsellersJob < ApplicationJob
 
   private
 
-  def process_bestseller_skus(skus, task, stats, limit)
+  def process_bestseller_skus(skus, bestseller_urls, bestseller_names, task, stats, limit)
     Rails.logger.info "ParseBestsellersJob: Processing #{skus.length} bestseller SKUs"
     Rails.logger.info "ParseBestsellersJob: First 10 SKUs: #{skus.first(10).inspect}"
+    if bestseller_urls.any?
+      Rails.logger.info "ParseBestsellersJob: Have URLs for #{bestseller_urls.length} products"
+    end
+    if bestseller_names.any?
+      Rails.logger.info "ParseBestsellersJob: Have names for #{bestseller_names.length} products"
+    end
     
     # Сначала сбрасываем все флаги is_bestseller
     Product.update_all(is_bestseller: false)
@@ -100,6 +110,8 @@ class ParseBestsellersJob < ApplicationJob
         # Нормализуем SKU (может быть с точками, дефисами, буквами)
         normalized_sku = sku.to_s.strip.gsub(/[.\-\s]/, '')
         original_sku = sku.to_s.strip
+        product_url = bestseller_urls[sku] || bestseller_urls[normalized_sku]
+        product_name = bestseller_names[sku] || bestseller_names[normalized_sku]
         
         # Пробуем найти продукт по разным вариантам SKU
         # 1. Точное совпадение
@@ -126,10 +138,20 @@ class ParseBestsellersJob < ApplicationJob
           end
         end
         
-        # 4. Поиск по URL (если SKU в URL)
+        # 4. Поиск по URL (если есть URL из homepage или SKU в URL)
         unless product
-          product = Product.where("url LIKE ?", "%#{normalized_sku}%").first ||
-                    Product.where("url LIKE ?", "%#{original_sku}%").first
+          if product_url
+            # Извлекаем SKU из URL и ищем по нему
+            if url_sku_match = product_url.match(/-(\d{8})/)
+              url_sku = url_sku_match[1].to_s.strip.gsub(/[.\-\s]/, '')
+              product = Product.find_by(sku: url_sku)
+            end
+            # Также ищем по полному URL
+            product ||= Product.where("url LIKE ?", "%#{product_url.split('/p/').last.split('/').first}%").first
+          end
+          # Fallback: поиск по SKU в URL
+          product ||= Product.where("url LIKE ?", "%#{normalized_sku}%").first ||
+                      Product.where("url LIKE ?", "%#{original_sku}%").first
         end
       
       if product
@@ -138,11 +160,21 @@ class ParseBestsellersJob < ApplicationJob
           stats[:updated] += 1
           task.increment_updated!
           found_count += 1
-          Rails.logger.info "ParseBestsellersJob: Marked product #{product.name} (SKU: #{product.sku}) as bestseller (found by: #{original_sku})"
+          log_name = product_name || product.name
+          log_url = product_url ? " (URL: #{product_url})" : ""
+          Rails.logger.info "ParseBestsellersJob: Marked product #{log_name} (SKU: #{product.sku}) as bestseller (found by: #{original_sku})#{log_url}"
         end
       else
-        not_found_skus << original_sku
-        Rails.logger.debug "ParseBestsellersJob: Product with SKU '#{original_sku}' (normalized: '#{normalized_sku}') not found in database"
+        not_found_skus << {
+          sku: original_sku,
+          normalized: normalized_sku,
+          name: product_name,
+          url: product_url
+        }
+        log_msg = "ParseBestsellersJob: Product with SKU '#{original_sku}' (normalized: '#{normalized_sku}') not found in database"
+        log_msg += " - Name: #{product_name}" if product_name
+        log_msg += " - URL: #{product_url}" if product_url
+        Rails.logger.debug log_msg
       end
       
       stats[:processed] += 1
@@ -151,7 +183,11 @@ class ParseBestsellersJob < ApplicationJob
     
     Rails.logger.info "ParseBestsellersJob: Found #{found_count} products, #{not_found_skus.length} not found"
     if not_found_skus.length > 0 && not_found_skus.length <= 20
-      Rails.logger.warn "ParseBestsellersJob: Not found SKUs (first 20): #{not_found_skus.first(20).inspect}"
+      Rails.logger.warn "ParseBestsellersJob: Not found SKUs (first 20): #{not_found_skus.first(20).map { |n| n[:sku] }.inspect}"
+      # Логируем детали для первых 5 не найденных
+      not_found_skus.first(5).each do |not_found|
+        Rails.logger.warn "ParseBestsellersJob: Not found details - SKU: #{not_found[:sku]}, Name: #{not_found[:name] || 'N/A'}, URL: #{not_found[:url] || 'N/A'}"
+      end
     end
   end
 

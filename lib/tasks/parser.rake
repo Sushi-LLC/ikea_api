@@ -64,23 +64,43 @@ namespace :parser do
 
   desc "Очистка БД: категории, продукты и связанные ресурсы (картинки)"
   task clean_db: :environment do
-    puts "=" * 60
-    puts "Очистка базы данных и файлов"
-    puts "=" * 60
+    puts "=" * 80
+    puts "ПОЛНАЯ ОЧИСТКА БАЗЫ ДАННЫХ И ФАЙЛОВ"
+    puts "=" * 80
     
-    # Удаляем записи из БД
-    puts "\nУдаление категорий и продуктов..."
+    # Подсчитываем перед удалением
     categories_count = Category.count
     products_count = Product.count
+    category_products_count = CategoryProduct.count
+    product_filter_values_count = ProductFilterValue.count
     
-    Category.destroy_all
+    puts "\n📊 СТАТИСТИКА ПЕРЕД ОЧИСТКОЙ:"
+    puts "  - Категорий: #{categories_count}"
+    puts "  - Продуктов: #{products_count}"
+    puts "  - Связей категория-продукт: #{category_products_count}"
+    puts "  - Связей продукт-фильтр: #{product_filter_values_count}"
+    
+    # Удаляем записи из БД в правильном порядке (сначала зависимости)
+    puts "\n🗑️  УДАЛЕНИЕ ДАННЫХ:"
+    
+    puts "  1. Удаление связей продукт-фильтр..."
+    ProductFilterValue.destroy_all
+    puts "     ✓ Удалено связей продукт-фильтр: #{product_filter_values_count}"
+    
+    puts "  2. Удаление связей категория-продукт..."
+    CategoryProduct.destroy_all
+    puts "     ✓ Удалено связей категория-продукт: #{category_products_count}"
+    
+    puts "  3. Удаление продуктов..."
     Product.destroy_all
+    puts "     ✓ Удалено продуктов: #{products_count}"
     
-    puts "  ✓ Удалено категорий: #{categories_count}"
-    puts "  ✓ Удалено продуктов: #{products_count}"
+    puts "  4. Удаление категорий..."
+    Category.destroy_all
+    puts "     ✓ Удалено категорий: #{categories_count}"
     
     # Удаляем картинки
-    puts "\nУдаление картинок..."
+    puts "\n🖼️  УДАЛЕНИЕ ИЗОБРАЖЕНИЙ:"
     images_path = Rails.root.join('public', 'images')
     
     if images_path.exist?
@@ -98,17 +118,31 @@ namespace :parser do
         FileUtils.rm_rf(products_path)
         puts "  ✓ Удалено картинок продуктов: #{products_deleted}"
       end
+    else
+      puts "  ℹ️  Папка images не найдена"
     end
     
-    # Очищаем кэш переводов (опционально)
-    puts "\nОчистка кэша переводов..."
-    translation_cache_count = TranslationCache.count
-    TranslationCache.destroy_all
-    puts "  ✓ Удалено записей кэша: #{translation_cache_count}"
+    # Очищаем кэш переводов
+    puts "\n💾 ОЧИСТКА КЭША:"
+    if defined?(TranslationCache)
+      translation_cache_count = TranslationCache.count
+      TranslationCache.destroy_all
+      puts "  ✓ Удалено записей кэша переводов: #{translation_cache_count}"
+    else
+      puts "  ℹ️  TranslationCache не определен"
+    end
     
-    puts "\n" + "=" * 60
-    puts "Очистка завершена!"
-    puts "=" * 60
+    # Очищаем Rails кэш
+    Rails.cache.clear
+    puts "  ✓ Очищен Rails кэш"
+    
+    puts "\n" + "=" * 80
+    puts "✅ ОЧИСТКА ЗАВЕРШЕНА!"
+    puts "=" * 80
+    puts "\n💡 Теперь можно запустить полный парсинг:"
+    puts "   rake parser:parse_categories"
+    puts "   rake parser:parse_products"
+    puts ""
   end
 
   desc "Тестовый парсинг: 10 категорий и по 10 продуктов для каждой (синхронно)"

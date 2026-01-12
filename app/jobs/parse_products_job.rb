@@ -104,46 +104,38 @@ class ParseProductsJob < ApplicationJob
       begin
         products_data = []
         
-        # Определяем оптимальные стратегии на основе анализа категорий без продуктов
-        # Для категорий без продуктов: приоритет HTML парсинга (все имеют URL)
-        # Для категорий с продуктами: используем стандартный порядок
-        if has_existing_products
-          # Для категорий с существующими продуктами используем стандартный порядок
-          # (обратная совместимость)
-          if !is_uuid_category
-            products_data = CategoryProductsSearchService.search(
-              category,
-              offset: offset,
-              limit: page_size,
-              strategies: [
-                :api_by_category_id,      # Сначала пробуем стандартный API
-                :api_alternative_endpoint, # Затем альтернативный endpoint
-                :api_by_category_name,     # Затем поиск по названию
-                :html_parsing              # И наконец HTML парсинг
-              ]
-            )
-          else
-            # Для UUID категорий используем только HTML парсинг
-            if category.url.present?
-              products_data = CategoryProductsFetcher.fetch(
-                category.url,
-                offset: offset,
-                limit: page_size
-              )
-            end
-          end
-        else
-          # Для категорий БЕЗ продуктов используем оптимизированный порядок стратегий
-          # на основе анализа: HTML парсинг приоритет 1 (все категории имеют URL)
-          optimal_strategies = CategoryProductsSearchService.optimal_strategies_for_category(category)
-          
-          Rails.logger.info "ParseProductsJob: Category #{category.ikea_id} has no products, using optimized strategies: #{optimal_strategies.join(', ')}"
-          
+        # ВАЖНО: Используем ВСЕ доступные стратегии для максимального покрытия
+        # Как в rake-задачах - пробуем все методы последовательно
+        all_strategies = CategoryProductsSearchService::STRATEGIES
+        
+        Rails.logger.info "ParseProductsJob: Using ALL strategies for category #{category.ikea_id} (#{category.name}): #{all_strategies.join(', ')}"
+        
+        # Для категорий с числовыми ID используем все стратегии
+        if !is_uuid_category
           products_data = CategoryProductsSearchService.search(
             category,
             offset: offset,
             limit: page_size,
-            strategies: optimal_strategies
+            strategies: all_strategies
+          )
+        else
+          # Для UUID категорий используем HTML парсинг и поиск через дочерние категории
+          strategies_for_uuid = [:html_parsing, :children_categories, :api_by_category_name]
+          products_data = CategoryProductsSearchService.search(
+            category,
+            offset: offset,
+            limit: page_size,
+            strategies: strategies_for_uuid
+          )
+        end
+        
+        # Если не нашли продукты через CategoryProductsSearchService, пробуем напрямую
+        if products_data.empty? && category.url.present?
+          Rails.logger.info "ParseProductsJob: Trying direct HTML parsing for category #{category.ikea_id}"
+          products_data = CategoryProductsFetcher.fetch(
+            category.url,
+            offset: offset,
+            limit: page_size
           )
         end
         
@@ -282,7 +274,7 @@ class ParseProductsJob < ApplicationJob
                []
              end
     
-    # Цена может быть в разных форматах
+    # Цена может быть в разных форматах (ОБЯЗАТЕЛЬНОЕ ПОЛЕ)
     price = product_data.dig('salesPrice', 'numeral') || 
             product_data.dig(:salesPrice, :numeral) ||
             product_data.dig('salesPrice', :numeral) ||
@@ -290,7 +282,19 @@ class ParseProductsJob < ApplicationJob
             product_data.dig('price', 'numeral') || 
             product_data.dig(:price, :numeral) ||
             product_data['price'] || 
-            product_data[:price]
+            product_data[:price] ||
+            product_data.dig('gprDescription', 'salesPrice', 'numeral') ||
+            product_data.dig('gprDescription', 'price', 'numeral')
+    
+    # Преобразуем цену в число, если это строка
+    if price.is_a?(String)
+      price = price.gsub(/[^\d,.]/, '').gsub(',', '.').to_f
+    end
+    
+    # Если цена не найдена, логируем предупреждение
+    if price.blank? || price.to_f == 0
+      Rails.logger.warn "ParseProductsJob: Product #{sku} has no price or price is 0"
+    end
     
     # Извлекаем флаги isBestseller и isPopular из API ответа
     is_bestseller = product_data['isBestseller'] || 
@@ -337,28 +341,64 @@ class ParseProductsJob < ApplicationJob
     # - FetchProductExtendedAttributesJob - для расширенных атрибутов
     # - DownloadProductImagesJob - для загрузки картинок
     
-    # Получаем количество (quantity) из батч-запроса наличия
-    if item_no.present? && availability_data.present?
-      # Пробуем найти данные по item_no (может быть строка или число)
-      availability = availability_data[item_no.to_s] || availability_data[item_no.to_i] || availability_data[item_no]
-      
-      if availability && availability[:quantity].present?
-        attributes[:quantity] = availability[:quantity] || availability['quantity'] || 0
-        # Обновляем is_parcel из данных наличия, если доступно
-        if availability[:is_parcel].present? || availability['is_parcel'].present?
-          attributes[:is_parcel] = availability[:is_parcel] || availability['is_parcel']
-        end
-      else
-        attributes[:quantity] ||= 0
-      end
-    else
-      attributes[:quantity] ||= 0
+    # Получаем количество (quantity) - ОБЯЗАТЕЛЬНОЕ ПОЛЕ
+    # Стратегия 1: Из product_data (может быть из HTML парсинга)
+    quantity_from_data = product_data['quantity'] || product_data[:quantity]
+    if quantity_from_data.is_a?(Hash)
+      quantity_from_data = quantity_from_data['quantity'] || quantity_from_data[:quantity]
     end
     
-    # Примечание: Переводы вынесены в FetchProductExtendedAttributesJob
-    # Здесь НЕ делаем перевод, чтобы не замедлять базовый парсинг
-    # Перевод будет выполнен в FetchProductExtendedAttributesJob
+    # Стратегия 2: Из поля availability в API ответе (если есть)
+    quantity_from_api = extract_quantity_from_api_response(product_data) unless quantity_from_data.present?
     
+    # Стратегия 3: Из батч-запроса наличия
+    quantity_from_availability = nil
+    if item_no.present? && availability_data.present? && !quantity_from_data.present? && !quantity_from_api.present?
+      availability = availability_data[item_no.to_s] || availability_data[item_no.to_i] || availability_data[item_no]
+      if availability && availability[:quantity].present?
+        quantity_from_availability = availability[:quantity] || availability['quantity'] || 0
+      end
+    end
+    
+    # Используем первое доступное значение
+    attributes[:quantity] = quantity_from_data || quantity_from_api || quantity_from_availability || 0
+    
+    # Логируем предупреждение, если количество не найдено
+    if attributes[:quantity] == 0
+      Rails.logger.warn "ParseProductsJob: Product #{sku} (item_no: #{item_no}) has no quantity data from any source"
+    else
+      source = quantity_from_data ? 'HTML' : (quantity_from_api ? 'API' : 'availability')
+      Rails.logger.debug "ParseProductsJob: Product #{sku} quantity: #{attributes[:quantity]} (source: #{source})"
+    end
+    
+    # Обновляем is_parcel из данных наличия, если доступно
+    if item_no.present? && availability_data.present?
+      availability = availability_data[item_no.to_s] || availability_data[item_no.to_i] || availability_data[item_no]
+      if availability && (availability[:is_parcel].present? || availability['is_parcel'].present?)
+        attributes[:is_parcel] = availability[:is_parcel] || availability['is_parcel']
+      end
+    end
+    
+    # ВАЖНО: Переводим название продукта сразу в базовом парсере
+    # Переводим только если name_ru еще не установлен или совпадает с оригиналом
+    if name.present? && (product.nil? || product.name_ru.blank? || product.name_ru == product.name)
+      begin
+        attributes[:name_ru] = TranslationService.translate(
+          name,
+          target_lang: 'ru',
+          source_lang: 'pl'
+        )
+        Rails.logger.debug "ParseProductsJob: Translated name for #{sku}: #{name} → #{attributes[:name_ru]}"
+      rescue => e
+        Rails.logger.warn "ParseProductsJob: Translation failed for product #{sku}: #{e.message}"
+        # Продолжаем без перевода, не блокируем парсинг
+      end
+    elsif product && product.name_ru.present? && product.name_ru != product.name
+      # Используем существующий перевод, если он есть
+      attributes[:name_ru] = product.name_ru
+    end
+    
+    # ВАЖНО: Создаем или обновляем продукт
     if product
       product.update!(attributes)
       result = { created: false, updated: true }
@@ -367,10 +407,126 @@ class ParseProductsJob < ApplicationJob
       result = { created: true, updated: false }
     end
     
+    # ВАЖНО: Создаем связь через CategoryProduct СРАЗУ после сохранения продукта
+    # Это гарантирует, что продукт связан с категорией в процессе сбора данных
+    category_product = CategoryProduct.find_or_create_by(
+      product: product,
+      category_id: category.ikea_id
+    )
+    
+    if category_product.persisted? && category_product.previously_new_record?
+      Rails.logger.info "ParseProductsJob: Created category_product link: #{product.sku} -> #{category.ikea_id}"
+    else
+      Rails.logger.debug "ParseProductsJob: Category_product link already exists: #{product.sku} -> #{category.ikea_id}"
+    end
+    
     # Примечание: Загрузка изображений вынесена в отдельную задачу DownloadProductImagesJob
     # Здесь только сохраняем URL изображений в поле images
     
     result
+  end
+  
+  # Извлечение количества из API ответа (поле availability)
+  def extract_quantity_from_api_response(product_data)
+    return nil unless product_data.is_a?(Hash)
+    
+    # Пробуем извлечь из поля availability
+    availability = product_data['availability'] || product_data[:availability]
+    return nil unless availability.present?
+    
+    # availability может быть массивом объектов
+    if availability.is_a?(Array)
+      # Ищем объект с типом HOME_DELIVERY или CASH_AND_CARRY
+      home_delivery = availability.find { |a| 
+        (a['type2'] == 'HOME_DELIVERY' || a[:type2] == 'HOME_DELIVERY') ||
+        (a['type'] == 'HOME_DELIVERY' || a[:type] == 'HOME_DELIVERY')
+      }
+      cash_carry = availability.find { |a| 
+        (a['type2'] == 'CASH_AND_CARRY' || a[:type2] == 'CASH_AND_CARRY') ||
+        (a['type'] == 'CASH_AND_CARRY' || a[:type] == 'CASH_AND_CARRY')
+      }
+      
+      # Пробуем извлечь quantity из объекта
+      avail_obj = home_delivery || cash_carry
+      if avail_obj
+        # Пробуем разные пути к quantity
+        quantity = avail_obj['quantity'] || avail_obj[:quantity] || 
+                   avail_obj.dig('availability', 'quantity') ||
+                   avail_obj.dig(:availability, :quantity) ||
+                   avail_obj.dig('stock', 'quantity') ||
+                   avail_obj.dig(:stock, :quantity)
+        
+        # ВАЖНО: Если quantity не найдено, но есть status, преобразуем статус в количество
+        if quantity.nil? && (avail_obj['status'] || avail_obj[:status])
+          status = (avail_obj['status'] || avail_obj[:status]).to_s.upcase
+          # Преобразуем статус в количество на основе реальных данных IKEA
+          case status
+          when 'HIGH_IN_STOCK', 'IN_STOCK'
+            quantity = 999 # Высокий запас - много товара
+          when 'LOW_IN_STOCK', 'LIMITED_STOCK'
+            quantity = 5 # Низкий запас - мало товара
+          when 'OUT_OF_STOCK', 'NOT_AVAILABLE', 'UNAVAILABLE'
+            quantity = 0 # Нет в наличии
+          when 'ONLINE_ONLY'
+            quantity = 1 # Только онлайн
+          else
+            # Если статус неизвестен, но есть текст о наличии
+            text = (avail_obj['text'] || avail_obj[:text] || '').to_s.downcase
+            if text.include?('dostępn') || text.include?('available') || text.include?('in stock')
+              quantity = 999
+            elsif text.include?('brak') || text.include?('out of stock') || text.include?('unavailable')
+              quantity = 0
+            else
+              quantity = 1 # По умолчанию - есть в наличии
+            end
+          end
+        end
+        
+        return quantity.to_i if quantity.present?
+      end
+      
+      # Если не нашли в HOME_DELIVERY/CASH_AND_CARRY, пробуем первый элемент массива
+      if availability.any?
+        first_avail = availability.first
+        if first_avail.is_a?(Hash)
+          status = (first_avail['status'] || first_avail[:status]).to_s.upcase
+          case status
+          when 'HIGH_IN_STOCK', 'IN_STOCK'
+            return 999
+          when 'LOW_IN_STOCK', 'LIMITED_STOCK'
+            return 5
+          when 'OUT_OF_STOCK', 'NOT_AVAILABLE', 'UNAVAILABLE'
+            return 0
+          end
+        end
+      end
+    elsif availability.is_a?(Hash)
+      # Если availability - это объект
+      quantity = availability['quantity'] || availability[:quantity] ||
+                 availability.dig('availability', 'quantity') ||
+                 availability.dig(:availability, :quantity) ||
+                 availability.dig('stock', 'quantity') ||
+                 availability.dig(:stock, :quantity)
+      
+      # Если quantity не найдено, пробуем по статусу
+      if quantity.nil? && (availability['status'] || availability[:status])
+        status = (availability['status'] || availability[:status]).to_s.upcase
+        case status
+        when 'HIGH_IN_STOCK', 'IN_STOCK'
+          quantity = 999
+        when 'LOW_IN_STOCK', 'LIMITED_STOCK'
+          quantity = 5
+        when 'OUT_OF_STOCK', 'NOT_AVAILABLE', 'UNAVAILABLE'
+          quantity = 0
+        else
+          quantity = 1
+        end
+      end
+      
+      return quantity.to_i if quantity.present?
+    end
+    
+    nil
   end
 end
 

@@ -19,7 +19,7 @@ Trestle.resource(:products, model: Product) do
     column :price do |product|
       number_to_currency(product.price, unit: 'Zl', format: '%n %u')
     end
-    column :quantity
+    column :quantity, sortable: true
     column :is_bestseller do |product|
       status_tag(product.is_bestseller? ? 'Да' : 'Нет', 
                  product.is_bestseller? ? :success : :secondary)

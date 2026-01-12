@@ -48,7 +48,9 @@
             <% if @product.category.present? %>
               <tr>
                 <th>Категория:</th>
-                <td><%= @product.category.name %></td>
+                <td>
+                  <%= link_to @product.category.name, categories_admin_path(@product.category.ikea_id), class: 'text-decoration-none' %>
+                </td>
               </tr>
             <% end %>
             <% if @product.price.present? %>

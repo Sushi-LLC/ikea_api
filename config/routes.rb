@@ -45,6 +45,10 @@ Rails.application.routes.draw do
       # Auth
       post 'auth/login', to: 'auth#login'
       post 'auth/register', to: 'auth#register'
+      
+      # Homepage
+      get 'homepage/slider/main', to: 'homepage#slider_main'
+      get 'homepage/slider/banners', to: 'homepage#slider_banners'
     end
   end
 end

@@ -1,0 +1,111 @@
+<div class="home-banner-show">
+  <div class="row">
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header">
+          <h4>Информация о баннере</h4>
+        </div>
+        <div class="card-body">
+          <dl class="row">
+            <dt class="col-sm-3">Секция:</dt>
+            <dd class="col-sm-9">
+              <% case @banner.section %>
+              <% when 'main' %>
+                <span class="badge badge-info">Основная информация</span>
+              <% when 'secondary' %>
+                <span class="badge badge-success">Баннеры</span>
+              <% end %>
+            </dd>
+
+            <dt class="col-sm-3">Вариант размера:</dt>
+            <dd class="col-sm-9">
+              <% case @banner.variant %>
+              <% when 'main_1500x516' %>
+                1500×516
+              <% when 'main_572x594' %>
+                572×594
+              <% when 'secondary_1500x256' %>
+                1500×256
+              <% when 'secondary_742x256' %>
+                742×256
+              <% end %>
+            </dd>
+
+            <dt class="col-sm-3">Заголовок:</dt>
+            <dd class="col-sm-9"><%= @banner.title || '—' %></dd>
+
+            <dt class="col-sm-3">Подзаголовок:</dt>
+            <dd class="col-sm-9"><%= @banner.subtitle || '—' %></dd>
+
+            <dt class="col-sm-3">Категория:</dt>
+            <dd class="col-sm-9">
+              <% if @banner.category %>
+                <%= @banner.category.name %>
+              <% else %>
+                —
+              <% end %>
+            </dd>
+
+            <dt class="col-sm-3">Позиция:</dt>
+            <dd class="col-sm-9"><%= @banner.position %></dd>
+
+            <dt class="col-sm-3">Статус:</dt>
+            <dd class="col-sm-9">
+              <% if @banner.active? %>
+                <span class="badge badge-success">Активен</span>
+              <% else %>
+                <span class="badge badge-danger">Неактивен</span>
+              <% end %>
+            </dd>
+
+            <dt class="col-sm-3">Создан:</dt>
+            <dd class="col-sm-9"><%= @banner.created_at.strftime('%d.%m.%Y %H:%M') %></dd>
+
+            <dt class="col-sm-3">Обновлен:</dt>
+            <dd class="col-sm-9"><%= @banner.updated_at.strftime('%d.%m.%Y %H:%M') %></dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header">
+          <h4>Изображение</h4>
+        </div>
+        <div class="card-body" style="text-align: center;">
+          <% if @banner.image.attached? %>
+            <%= image_tag Rails.application.routes.url_helpers.rails_blob_path(@banner.image, only_path: true), 
+                          class: "img-fluid", 
+                          style: "max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 4px; padding: 5px;" %>
+            <p class="mt-3">
+              <small class="text-muted">
+                Размер: 
+                <% begin %>
+                  <% @banner.image.blob.open do |file| %>
+                    <% img = MiniMagick::Image.open(file.path) %>
+                    <%= img.width %>×<%= img.height %> px
+                    <% expected = @banner.expected_dimensions %>
+                    <% if expected %>
+                      <br>
+                      Ожидается: <%= expected[0] %>×<%= expected[1] %> px
+                      <% if img.width == expected[0] && img.height == expected[1] %>
+                        <span class="badge badge-success">✓ Корректно</span>
+                      <% else %>
+                        <span class="badge badge-warning">⚠ Не соответствует</span>
+                      <% end %>
+                    <% end %>
+                  <% end %>
+                <% rescue => e %>
+                  Не удалось определить
+                <% end %>
+              </small>
+            </p>
+          <% else %>
+            <p class="text-muted">Изображение не загружено</p>
+          <% end %>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

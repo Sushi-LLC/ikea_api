@@ -298,6 +298,55 @@ paths:
         '422':
           description: Ошибка валидации
 
+  /api/v1/homepage/slider/main:
+    get:
+      summary: Баннеры основной секции главной страницы
+      description: |
+        Возвращает активные баннеры секции "Основная информация" для главной страницы.
+        Баннеры фильтруются по активному статусу (active = true) и отсортированы по позиции.
+        Доступные варианты размеров: 1500×516, 572×594
+      tags:
+        - Homepage
+      responses:
+        '200':
+          description: Список активных баннеров основной секции
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HomeBanner'
+        '500':
+          description: Внутренняя ошибка сервера
+
+  /api/v1/homepage/slider/banners:
+    get:
+      summary: Баннеры дополнительной секции главной страницы
+      description: |
+        Возвращает активные баннеры секции "Баннеры" для главной страницы.
+        Баннеры фильтруются по активному статусу (active = true) и отсортированы по позиции.
+        Доступные варианты размеров: 1500×256, 742×256
+      tags:
+        - Homepage
+      responses:
+        '200':
+          description: Список активных баннеров дополнительной секции
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HomeBanner'
+        '500':
+          description: Внутренняя ошибка сервера
+
+
 components:
   schemas:
     Product:
@@ -446,6 +495,70 @@ components:
           type: integer
         per_page:
           type: integer
+
+    HomeBanner:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          example: "home_banner"
+        attributes:
+          type: object
+          properties:
+            section:
+              type: string
+              enum: [main, secondary]
+              description: Секция баннера - main (Основная информация) или secondary (Баннеры)
+            variant:
+              type: string
+              enum: [main_1500x516, main_572x594, secondary_1500x256, secondary_742x256]
+              description: Вариант размера изображения
+            title:
+              type: string
+              nullable: true
+              description: Заголовок баннера
+            subtitle:
+              type: string
+              nullable: true
+              description: Подзаголовок баннера
+            position:
+              type: integer
+              description: Позиция для сортировки
+            active:
+              type: boolean
+              description: Активен ли баннер
+            image_url:
+              type: string
+              nullable: true
+              description: URL изображения баннера
+            link_url:
+              type: string
+              nullable: true
+              description: URL ссылки на категорию
+            created_at:
+              type: string
+              format: date-time
+            updated_at:
+              type: string
+              format: date-time
+        relationships:
+          type: object
+          properties:
+            category:
+              type: object
+              properties:
+                data:
+                  type: object
+                  nullable: true
+                  properties:
+                    id:
+                      type: string
+                    type:
+                      type: string
+                      example: "category"
+
 
   securitySchemes:
     BearerAuth:

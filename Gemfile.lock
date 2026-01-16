@@ -192,6 +192,8 @@ GEM
       net-smtp
     marcel (1.1.0)
     method_source (1.1.0)
+    mini_magick (5.3.1)
+      logger
     mini_mime (1.1.5)
     minitest (5.26.2)
     msgpack (1.8.0)
@@ -424,6 +426,7 @@ DEPENDENCIES
   httparty (~> 0.21)
   jwt
   kaminari
+  mini_magick
   nokogiri (~> 1.15)
   pg (~> 1.1)
   pry-rails

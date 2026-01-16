@@ -42,6 +42,9 @@ gem "httparty", "~> 0.21"
 # HTML парсинг для детальных страниц продуктов
 gem "nokogiri", "~> 1.15"
 
+# Image processing for dimension validation
+gem "mini_magick"
+
 # Headless браузер для загрузки динамического контента
 gem "ferrum", "~> 0.15"
 

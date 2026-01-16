@@ -76,6 +76,9 @@ Rails.application.configure do
   # Do not dump schema after migrations.
   config.active_record.dump_schema_after_migration = false
 
+  # ActiveStorage configuration - use disk service in production (can be changed to S3 later)
+  config.active_storage.service = :local
+
   # Enable DNS rebinding protection and other `Host` header attacks.
   # config.hosts = [
   #   "example.com",     # Allow requests from example.com

@@ -32,6 +32,10 @@ Trestle.resource(:products, model: Product) do
     actions
   end
 
+  hook("resource.index.header") do
+    render partial: "trestle/products/smart_search_panel"
+  end
+
   controller do
     def show
       @product = admin.find_instance(params)

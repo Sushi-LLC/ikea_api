@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_01_20_120005) do
+ActiveRecord::Schema[7.1].define(version: 2026_01_22_120001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -153,6 +153,72 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_20_120005) do
     t.index ["section", "active", "position"], name: "index_home_banners_on_section_and_active_and_position"
   end
 
+  create_table "home_slider_banners", force: :cascade do |t|
+    t.bigint "home_slider_id", null: false
+    t.integer "position", default: 0, null: false
+    t.string "link_url"
+    t.string "title"
+    t.string "subtitle"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["home_slider_id", "position"], name: "index_home_slider_banners_on_home_slider_id_and_position"
+    t.index ["home_slider_id"], name: "index_home_slider_banners_on_home_slider_id"
+  end
+
+  create_table "home_sliders", force: :cascade do |t|
+    t.string "title"
+    t.integer "layout_type", default: 0, null: false
+    t.integer "position", default: 0, null: false
+    t.boolean "active", default: true, null: false
+    t.datetime "starts_at"
+    t.datetime "ends_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["active", "starts_at", "ends_at"], name: "index_home_sliders_on_active_and_starts_at_and_ends_at"
+    t.index ["active"], name: "index_home_sliders_on_active"
+    t.index ["position"], name: "index_home_sliders_on_position"
+  end
+
+  create_table "homepage_product_block_items", force: :cascade do |t|
+    t.bigint "homepage_product_block_id", null: false
+    t.string "product_id", null: false
+    t.integer "position", null: false
+    t.datetime "starts_at"
+    t.datetime "ends_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["homepage_product_block_id", "position"], name: "idx_on_homepage_product_block_id_position_e9e5de2d57"
+    t.index ["homepage_product_block_id"], name: "idx_on_homepage_product_block_id_686cddbf3a"
+    t.index ["product_id"], name: "index_homepage_product_block_items_on_product_id"
+    t.index ["starts_at", "ends_at"], name: "index_homepage_product_block_items_on_starts_at_and_ends_at"
+  end
+
+  create_table "homepage_product_block_rules", force: :cascade do |t|
+    t.bigint "homepage_product_block_id", null: false
+    t.string "rule_type", null: false
+    t.jsonb "payload", default: {}, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["homepage_product_block_id", "rule_type"], name: "idx_on_homepage_product_block_id_rule_type_9216ece37d"
+    t.index ["homepage_product_block_id"], name: "idx_on_homepage_product_block_id_b9d3beedce"
+    t.index ["payload"], name: "index_homepage_product_block_rules_on_payload", using: :gin
+  end
+
+  create_table "homepage_product_blocks", force: :cascade do |t|
+    t.string "key", null: false
+    t.string "title", null: false
+    t.boolean "active", default: true, null: false
+    t.integer "limit", default: 10, null: false
+    t.integer "source_type", default: 0, null: false
+    t.integer "category_level", default: 1
+    t.integer "position", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["active"], name: "index_homepage_product_blocks_on_active"
+    t.index ["key"], name: "index_homepage_product_blocks_on_key", unique: true
+    t.index ["position"], name: "index_homepage_product_blocks_on_position"
+  end
+
   create_table "parser_tasks", force: :cascade do |t|
     t.string "task_type", null: false
     t.string "status", default: "pending"
@@ -172,6 +238,16 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_20_120005) do
     t.index ["status"], name: "index_parser_tasks_on_status"
     t.index ["task_type", "status"], name: "index_parser_tasks_on_task_type_and_status"
     t.index ["task_type"], name: "index_parser_tasks_on_task_type"
+  end
+
+  create_table "popular_search_queries", force: :cascade do |t|
+    t.string "query", null: false
+    t.integer "weight", default: 0, null: false
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["active"], name: "index_popular_search_queries_on_active"
+    t.index ["query"], name: "index_popular_search_queries_on_query"
   end
 
   create_table "product_filter_values", force: :cascade do |t|
@@ -252,6 +328,17 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_20_120005) do
     t.index ["updated_at"], name: "index_products_on_updated_at"
   end
 
+  create_table "search_query_logs", force: :cascade do |t|
+    t.bigint "customer_id"
+    t.string "query", null: false
+    t.integer "results_count", default: 0, null: false
+    t.string "clicked_product_sku"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["customer_id"], name: "index_search_query_logs_on_customer_id"
+    t.index ["query"], name: "index_search_query_logs_on_query"
+  end
+
   create_table "translation_caches", force: :cascade do |t|
     t.text "text", null: false
     t.string "target_language", limit: 10, null: false
@@ -281,6 +368,11 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_20_120005) do
   add_foreign_key "category_products", "products"
   add_foreign_key "filter_values", "filters"
   add_foreign_key "home_banners", "categories", primary_key: "ikea_id", on_delete: :nullify
+  add_foreign_key "home_slider_banners", "home_sliders"
+  add_foreign_key "homepage_product_block_items", "homepage_product_blocks"
+  add_foreign_key "homepage_product_block_items", "products", primary_key: "sku"
+  add_foreign_key "homepage_product_block_rules", "homepage_product_blocks"
   add_foreign_key "product_filter_values", "filter_values"
   add_foreign_key "product_filter_values", "products"
+  add_foreign_key "search_query_logs", "users", column: "customer_id"
 end

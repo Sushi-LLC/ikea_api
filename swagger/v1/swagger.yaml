@@ -346,6 +346,48 @@ paths:
         '500':
           description: Внутренняя ошибка сервера
 
+  /api/v1/search/suggest:
+    get:
+      summary: Умные подсказки и результаты поиска
+      tags:
+        - Search
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Список подсказок, категорий, товаров и популярных запросов
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  suggestions:
+                    type: array
+                    items:
+                      type: string
+                  categories:
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Category'
+                  products:
+                    type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Product'
+                  popular_queries:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PopularSearchQuery'
+
 
 components:
   schemas:
@@ -495,6 +537,16 @@ components:
           type: integer
         per_page:
           type: integer
+
+    PopularSearchQuery:
+      type: object
+      properties:
+        query:
+          type: string
+        weight:
+          type: integer
+        active:
+          type: boolean
 
     HomeBanner:
       type: object

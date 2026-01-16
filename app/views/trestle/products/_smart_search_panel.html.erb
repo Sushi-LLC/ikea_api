@@ -1,0 +1,142 @@
+<div id="trestle-smart-search-panel" class="card mb-4">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h3 class="h5 m-0">Умный поиск</h3>
+      <span class="text-muted small">Algolia-like</span>
+    </div>
+
+    <form id="trestle-smart-search-form" class="search-form">
+      <div class="input-group">
+        <input type="search"
+               name="query"
+               class="form-control"
+               placeholder="Введите текст для поиска…"
+               autocomplete="off" />
+        <button type="submit" class="btn btn-primary">Искать</button>
+      </div>
+    </form>
+
+    <div id="trestle-smart-search-results" class="mt-3">
+      <p class="text-muted small mb-0">Результаты появятся после поиска.</p>
+    </div>
+  </div>
+</div>
+
+<style>
+  #trestle-smart-search-panel .smart-search-section {
+    margin-top: 0.8rem;
+  }
+
+  #trestle-smart-search-panel .smart-search-section ul {
+    margin: 0;
+    padding-left: 1rem;
+  }
+
+  #trestle-smart-search-panel .smart-search-section li {
+    margin-bottom: 0.25rem;
+  }
+</style>
+
+<script>
+  (function() {
+    var panel = document.getElementById('trestle-smart-search-panel');
+    if (!panel) return;
+
+    var form = document.getElementById('trestle-smart-search-form');
+    var results = document.getElementById('trestle-smart-search-results');
+
+    form.addEventListener('submit', function(event) {
+      event.preventDefault();
+      var query = form.querySelector('input[name="query"]').value.trim();
+      if (!query) {
+        results.innerHTML = '<p class="text-muted small mb-0">Введите текст запроса.</p>';
+        return;
+      }
+
+      results.innerHTML = '<p class="text-muted small mb-0">Ищем…</p>';
+
+      fetch('/api/v1/search/suggest?q=' + encodeURIComponent(query), { credentials: 'same-origin' })
+        .then(function(response) {
+          if (!response.ok) {
+            throw new Error('network');
+          }
+          return response.json();
+        })
+        .then(function(payload) {
+          results.innerHTML = buildSections(payload);
+        })
+        .catch(function() {
+          results.innerHTML = '<p class="text-danger small mb-0">Не удалось получить результаты.</p>';
+        });
+    });
+
+    function buildSections(data) {
+      var sections = [];
+
+      if (Array.isArray(data.suggestions) && data.suggestions.length) {
+        sections.push(renderSection('Подсказки', renderList(data.suggestions.map(function(item) {
+          return escapeHtml(item);
+        }))));
+      }
+
+      if (data.categories && Array.isArray(data.categories.data)) {
+        var categories = data.categories.data.map(function(item) {
+          var attrs = item.attributes || {};
+          return escapeHtml(attrs.translated_name || attrs.ikea_id || '');
+        }).filter(Boolean);
+
+        if (categories.length) {
+          sections.push(renderSection('Категории', renderList(categories)));
+        }
+      }
+
+      if (data.products && Array.isArray(data.products.data)) {
+        var products = data.products.data.map(function(item) {
+          var attrs = item.attributes || {};
+          return escapeHtml(attrs.name_ru || attrs.sku || '');
+        }).filter(Boolean);
+
+        if (products.length) {
+          sections.push(renderSection('Товары', renderList(products)));
+        }
+      }
+
+      if (Array.isArray(data.popular_queries) && data.popular_queries.length) {
+        sections.push(renderSection('Популярные запросы', renderList(data.popular_queries.map(function(entry) {
+          var label = entry.query || '';
+          if (entry.weight) {
+            label += ' (' + entry.weight + ')';
+          }
+          return escapeHtml(label);
+        }))));
+      }
+
+      if (!sections.length) {
+        return '<p class="text-muted small mb-0">Результаты не найдены.</p>';
+      }
+
+      return sections.join('');
+    }
+
+    function renderSection(title, body) {
+      return '<div class="smart-search-section">' +
+               '<strong>' + escapeHtml(title) + '</strong>' +
+               '<div class="mt-1">' + body + '</div>' +
+             '</div>';
+    }
+
+    function renderList(items) {
+      return '<ul class="list-unstyled mb-0">' +
+               items.map(function(item) {
+                 return '<li>' + item + '</li>';
+               }).join('') +
+             '</ul>';
+    }
+
+    function escapeHtml(value) {
+      var div = document.createElement('div');
+      div.textContent = value;
+      return div.innerHTML;
+    }
+  })();
+</script>

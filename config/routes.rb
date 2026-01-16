@@ -49,6 +49,7 @@ Rails.application.routes.draw do
       # Homepage
       get 'homepage/slider/main', to: 'homepage#slider_main'
       get 'homepage/slider/banners', to: 'homepage#slider_banners'
+      get 'search/suggest', to: 'search#suggest'
     end
   end
 end

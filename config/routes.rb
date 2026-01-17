@@ -1,5 +1,7 @@
 Rails.application.routes.draw do
   get '/up', to: 'health#check'
+  get '/feeds/google.xml', to: 'feeds#google'
+  get '/feeds/yandex.yml', to: 'feeds#yandex'
   
   # Trestle Admin Panel автоматически монтируется на /admin
   # (см. config/initializers/trestle.rb, config.automount = true)

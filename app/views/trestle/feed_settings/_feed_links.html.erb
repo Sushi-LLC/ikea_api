@@ -1,0 +1,26 @@
+<div class="card mt-4">
+  <div class="card-header">
+    <h5>Ссылки на фиды</h5>
+  </div>
+  <div class="card-body">
+    <% if feed_setting.persisted? && feed_setting.base_url.present? %>
+      <% base_url = feed_setting.base_url_root %>
+      <% token_query = feed_setting.token_query %>
+      <p>
+        <strong>Google / Meta:</strong>
+        <%= link_to "#{base_url}/api/v1/feeds/google.xml#{token_query}", "#{base_url}/api/v1/feeds/google.xml#{token_query}", target: "_blank", rel: "noopener" %>
+      </p>
+      <p>
+        <strong>Yandex:</strong>
+        <%= link_to "#{base_url}/api/v1/feeds/yandex.yml#{token_query}", "#{base_url}/api/v1/feeds/yandex.yml#{token_query}", target: "_blank", rel: "noopener" %>
+      </p>
+      <% if token_query.blank? && feed_setting.token_feed_access_mode? %>
+        <p class="text-warning">
+          Токен для защищенного доступа отсутствует — генерация фида будет недоступна.
+        </p>
+      <% end %>
+    <% else %>
+      <p class="text-muted">Сохраните настройки, чтобы увидеть ссылки на фиды.</p>
+    <% end %>
+  </div>
+</div>

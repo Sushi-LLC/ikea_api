@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_01_22_120001) do
+ActiveRecord::Schema[7.1].define(version: 2026_01_22_123000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -116,6 +116,23 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_22_120001) do
     t.datetime "updated_at", null: false
     t.index ["currency_code"], name: "index_exchange_rates_on_currency_code"
     t.index ["date", "currency_code"], name: "index_exchange_rates_on_date_and_currency_code", unique: true
+  end
+
+  create_table "feed_settings", force: :cascade do |t|
+    t.boolean "feeds_enabled", default: true, null: false
+    t.integer "feed_access_mode", default: 0, null: false
+    t.string "feed_token"
+    t.string "base_url", default: "https://example.com", null: false
+    t.string "currency_default", default: "BYN", null: false
+    t.string "store_name"
+    t.string "store_company"
+    t.string "store_platform_brand"
+    t.jsonb "availability_mapping", default: {"in_stock"=>"in stock", "preorder"=>"preorder", "out_of_stock"=>"out of stock"}, null: false
+    t.decimal "yml_delivery_cost", precision: 10, scale: 2
+    t.integer "yml_delivery_days"
+    t.boolean "include_out_of_stock", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
   end
 
   create_table "filter_values", force: :cascade do |t|

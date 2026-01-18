@@ -52,6 +52,10 @@ Rails.application.routes.draw do
       get 'homepage/slider/main', to: 'homepage#slider_main'
       get 'homepage/slider/banners', to: 'homepage#slider_banners'
       get 'search/suggest', to: 'search#suggest'
+
+      namespace :content do
+        resources :articles, only: [:index, :show], param: :slug
+      end
     end
   end
 end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_01_22_123000) do
+ActiveRecord::Schema[7.1].define(version: 2026_01_24_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -81,6 +81,53 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_22_123000) do
     t.index ["category_id"], name: "index_category_products_on_category_id"
     t.index ["product_id", "category_id"], name: "index_category_products_unique", unique: true
     t.index ["product_id"], name: "index_category_products_on_product_id"
+  end
+
+  create_table "content_article_categories", force: :cascade do |t|
+    t.bigint "content_article_id", null: false
+    t.string "category_id", null: false
+    t.integer "position", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["category_id"], name: "index_content_article_categories_on_category_id"
+    t.index ["content_article_id", "category_id"], name: "index_content_article_categories_on_article_and_category", unique: true
+    t.index ["content_article_id"], name: "index_content_article_categories_on_content_article_id"
+  end
+
+  create_table "content_article_products", force: :cascade do |t|
+    t.bigint "content_article_id", null: false
+    t.string "product_sku", null: false
+    t.integer "position", default: 0, null: false
+    t.integer "source", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["content_article_id", "product_sku"], name: "index_content_article_products_on_article_and_sku", unique: true
+    t.index ["content_article_id"], name: "index_content_article_products_on_content_article_id"
+    t.index ["product_sku"], name: "index_content_article_products_on_product_sku"
+  end
+
+  create_table "content_articles", force: :cascade do |t|
+    t.integer "content_type", default: 0, null: false
+    t.integer "status", default: 0, null: false
+    t.string "title", null: false
+    t.string "slug", null: false
+    t.text "excerpt"
+    t.jsonb "body_blocks", default: [], null: false
+    t.jsonb "tile_blocks", default: [], null: false
+    t.jsonb "components", default: [], null: false
+    t.jsonb "projects", default: [], null: false
+    t.jsonb "tags", default: [], null: false
+    t.boolean "pinned", default: false, null: false
+    t.integer "pinned_position", default: 0, null: false
+    t.datetime "published_at"
+    t.boolean "active", default: true, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["components"], name: "index_content_articles_on_components", using: :gin
+    t.index ["content_type", "status", "pinned", "pinned_position", "published_at", "active"], name: "index_content_articles_on_status_and_filters"
+    t.index ["projects"], name: "index_content_articles_on_projects", using: :gin
+    t.index ["slug"], name: "index_content_articles_on_slug", unique: true
+    t.index ["tags"], name: "index_content_articles_on_tags", using: :gin
   end
 
   create_table "cron_schedules", force: :cascade do |t|

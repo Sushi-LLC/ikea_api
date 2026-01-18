@@ -388,6 +388,87 @@ paths:
                     items:
                       $ref: '#/components/schemas/PopularSearchQuery'
 
+  /api/v1/content/articles:
+    get:
+      summary: Список статей Tips & Ideas и News
+      tags:
+        - Content
+      parameters:
+        - name: content_type
+          in: query
+          schema:
+            type: string
+            enum: [tips_ideas, news]
+          description: Тип контента, по умолчанию возвращаются оба
+        - name: tag
+          in: query
+          schema:
+            type: string
+          description: Фильтр по тегу
+        - name: component
+          in: query
+          schema:
+            type: string
+          description: Фильтр по компоненту
+        - name: project
+          in: query
+          schema:
+            type: string
+          description: Фильтр по проекту
+        - name: pinned_only
+          in: query
+          schema:
+            type: boolean
+          description: Отображать только закрепленные статьи
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Пагинируемый список активных и опубликованных статей
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ContentArticle'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /api/v1/content/articles/{slug}:
+    get:
+      summary: Подробная статья по slug
+      tags:
+        - Content
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Полный контент статьи
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ContentArticle'
+        '404':
+          description: Статья не найдена
+
 
 components:
   schemas:
@@ -547,6 +628,90 @@ components:
           type: integer
         active:
           type: boolean
+
+    ContentArticle:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+        attributes:
+          type: object
+          properties:
+            title:
+              type: string
+            slug:
+              type: string
+            excerpt:
+              type: string
+              nullable: true
+            content_type:
+              type: string
+              enum: [tips_ideas, news]
+            status:
+              type: string
+              enum: [draft, published, archived]
+            published_at:
+              type: string
+              format: date-time
+              nullable: true
+            body_blocks:
+              type: array
+              items:
+                type: object
+            tile_blocks:
+              type: array
+              items:
+                type: object
+            components:
+              type: array
+              items:
+                type: string
+            projects:
+              type: array
+              items:
+                type: string
+            tags:
+              type: array
+              items:
+                type: string
+            pinned:
+              type: boolean
+            pinned_position:
+              type: integer
+            active:
+              type: boolean
+            linked_products:
+              type: array
+              items:
+                type: object
+                properties:
+                  sku:
+                    type: string
+                  name:
+                    type: string
+                  price:
+                    type: number
+                  images:
+                    type: array
+                    items:
+                      type: string
+                  local_images:
+                    type: array
+                    items:
+                      type: string
+              nullable: true
+            linked_categories:
+              type: array
+              items:
+                type: object
+                properties:
+                  ikea_id:
+                    type: string
+                  name:
+                    type: string
+              nullable: true
 
     HomeBanner:
       type: object

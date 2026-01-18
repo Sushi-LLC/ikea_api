@@ -5,3 +5,6 @@
 // within individual partials and `require` them here.
 //
 //  e.g. //= require "trestle/custom/my_custom_js"
+
+//= require activestorage
+//= require trestle/content_article_builder

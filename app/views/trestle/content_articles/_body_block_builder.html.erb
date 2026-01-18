@@ -1,0 +1,32 @@
+<% block_templates = ContentArticle::BODY_BLOCK_TEMPLATES %>
+<% button_categories = Category.active.top_level.order(:name).map do |ctg|
+  { name: ctg.translated_name, ikea_id: ctg.ikea_id }
+end %>
+
+<%= hidden_field_tag "content_article[body_blocks_json]",
+      article.body_blocks_json,
+      class: "content-article-body-blocks-json" %>
+
+<%= content_tag :div, class: "content-article-block-builder", data: {
+  content_article_block_builder: true,
+  block_templates: block_templates.to_json,
+  initial_blocks: article.body_blocks_for_admin.to_json,
+  button_categories: button_categories.to_json,
+  direct_upload_url: main_app.rails_direct_uploads_path,
+  products_by_category_url: main_app.admin_products_by_category_path
+} do %>
+  <div class="builder-controls">
+    <div class="builder-template-selector">
+      <label>Шаблон блока</label>
+      <select class="builder-template-select">
+        <% block_templates.each do |template| %>
+          <option value="<%= template[:id] %>"><%= template[:label] %></option>
+        <% end %>
+      </select>
+    </div>
+    <button type="button" class="builder-add-block btn btn-primary">
+      Добавить блок
+    </button>
+  </div>
+  <div class="builder-block-list"></div>
+<% end %>

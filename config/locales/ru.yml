@@ -1,0 +1,11 @@
+ru:
+  activerecord:
+    attributes:
+      content_article:
+        content_type:
+          tips_ideas: "Советы и идеи"
+          news: "Новости"
+        status:
+          draft: "Черновик"
+          published: "Опубликовано"
+          archived: "В архиве"

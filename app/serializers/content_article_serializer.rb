@@ -4,8 +4,12 @@ class ContentArticleSerializer
   set_id :slug
 
   attributes :title, :slug, :excerpt, :content_type, :status,
-             :published_at, :body_blocks, :tile_blocks,
+             :published_at, :tile_blocks,
              :components, :projects, :tags, :pinned, :pinned_position, :active
+
+  attribute :body_blocks do |article|
+    article.serialized_body_blocks
+  end
 
   attribute :linked_products, if: Proc.new { |_record, params| params&.dig(:detail) } do |article, params|
     ordered_associations = params[:linked_products_ordered] || article.content_article_products.order(:position)

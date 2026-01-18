@@ -3,6 +3,10 @@ Trestle.resource(:products, model: Product) do
     item :products, icon: "fa fa-cube", priority: 2, label: "Продукты", group: "Catalog"
   end
 
+  routes do
+    get :by_category, on: :collection
+  end
+
   scopes do
     scope :all, default: true
     scope :bestsellers, -> { Product.bestsellers }
@@ -40,6 +44,22 @@ Trestle.resource(:products, model: Product) do
     def show
       @product = admin.find_instance(params)
       render "trestle/products/show"
+    end
+
+    def by_category
+      category_ikea_id = params[:category_id].to_s.strip
+      return render(json: []) if category_ikea_id.blank?
+
+      products = Product
+        .joins(:categories)
+        .where(categories: { ikea_id: category_ikea_id })
+        .distinct
+        .order(:name)
+        .limit(500)
+
+      render json: products.map { |p|
+        { sku: p.sku, name: (p.name_ru.presence || p.sku) }
+      }
     end
   end
 

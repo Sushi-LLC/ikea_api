@@ -12,9 +12,12 @@ Trestle.resource(:content_articles, model: ContentArticle) do
 
   table do
     column :content_type do |article|
-      article.content_type.titleize
+      ContentArticle.human_attribute_name("content_type.#{article.content_type}")
     end
-    column :status
+    
+    column :status do |article|
+      ContentArticle.human_attribute_name("status.#{article.status}")
+    end
     column :title, link: true
     column :slug
     column :pinned do |article|
@@ -27,26 +30,43 @@ Trestle.resource(:content_articles, model: ContentArticle) do
   form do |article|
     tab :general do
       row do
-        col(sm: 6) { select :content_type, ContentArticle.content_types.keys.map { |key| [key.humanize, key] } }
-        col(sm: 6) { select :status, ContentArticle.statuses.keys.map { |key| [key.humanize, key] } }
+        col(sm: 6) do
+          select :content_type,
+                 ContentArticle.content_types.keys.map { |key| [ContentArticle.human_attribute_name("content_type.#{key}"), key] },
+                 label: "Тип контента"
+        end
+        
+        col(sm: 6) do
+          select :status,
+                 ContentArticle.statuses.keys.map { |key| [ContentArticle.human_attribute_name("status.#{key}"), key] },
+                 label: "Статус"
+        end
       end
       row do
-        col(sm: 12) { text_field :title, required: true }
+        col(sm: 12) { text_field :title, required: true, label: "Заголовок" }
       end
       row do
-        col(sm: 12) { text_field :slug, help: "Если не заполнено — будет сгенерировано автоматически" }
+        col(sm: 12) { text_field :slug, label: "Slug", hint: "Если не заполнено — будет сгенерировано автоматически" }
       end
       row do
-        col(sm: 12) { text_area :excerpt, rows: 3, help: "Короткое описание для плитки" }
+        col(sm: 12) { text_area :excerpt, rows: 3, label: "Короткое описание" }
       end
       row do
         col(sm: 12) do
-          text_area :body_blocks_json, rows: 6, help: "JSON-массив блоков статьи"
+          render "trestle/content_articles/body_block_builder", article: article
         end
       end
       row do
         col(sm: 12) do
-          text_area :tile_blocks_json, rows: 4, help: "Настройки плитки (JSON-массив)"
+          value = (article.serialized_body_blocks.presence || []).dup
+          concat content_tag(:label, "JSON страницы", class: "form-label")
+          concat text_area_tag(
+            "page_rendered_blocks",
+            JSON.pretty_generate(value),
+            rows: 10,
+            readonly: true,
+            class: "form-control"
+          )
         end
       end
     end
@@ -90,5 +110,26 @@ Trestle.resource(:content_articles, model: ContentArticle) do
         col(sm: 6) { check_box :active }
       end
     end
+  end
+
+  params do |params|
+    params.require(:content_article).permit(
+      :content_type,
+      :status,
+      :title,
+      :slug,
+      :excerpt,
+      :body_blocks_json,
+      :tile_blocks_json,
+      :components_input,
+      :projects_input,
+      :tags_input,
+      :product_skus_input,
+      :category_ids_input,
+      :pinned,
+      :pinned_position,
+      :published_at,
+      :active
+    )
   end
 end

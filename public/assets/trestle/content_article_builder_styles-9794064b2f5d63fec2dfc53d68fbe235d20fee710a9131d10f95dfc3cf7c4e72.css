@@ -1,0 +1,253 @@
+.content-article-body-blocks-json {
+  display: none;
+}
+
+.content-article-block-builder {
+  border: 1px solid #dfe3e8;
+  border-radius: 10px;
+  padding: 24px 24px 16px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(25, 37, 52, 0.08);
+  margin-bottom: 1.5rem;
+}
+
+.builder-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.builder-template-selector {
+  flex: 1;
+  min-width: 220px;
+}
+
+.builder-template-selector label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #5a6470;
+  margin-bottom: 4px;
+}
+
+.builder-template-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #cbd2d9;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.builder-add-block {
+  padding: 10px 18px;
+  border-radius: 6px;
+  background: #3485ef;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  transition: background 0.2s ease;
+}
+
+.builder-add-block:hover {
+  background: #2564c9;
+}
+
+.builder-block-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.content-article-block-card {
+  border: 1px solid #e3e8ef;
+  border-radius: 10px;
+  padding: 18px;
+  background: #fbfdff;
+}
+
+.block-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.block-card-header strong {
+  font-size: 14px;
+  color: #1d2a40;
+}
+
+.block-card-header select {
+  min-width: 200px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #cbd2d9;
+}
+
+.block-move-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.block-move-button {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #cbd2d9;
+  background: #f9fbff;
+  color: #1f2935;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 0.2s ease;
+}
+
+.block-move-button:hover {
+  background: #e9eef8;
+}
+
+.block-card-remove {
+  background: #ea5454;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.block-card-remove:hover {
+  opacity: 0.9;
+}
+
+.block-content-field {
+  margin-bottom: 16px;
+}
+
+.block-content-field label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #454f60;
+}
+
+.content-article-block-content {
+  width: 100%;
+  min-height: 140px;
+  padding: 10px;
+  border: 1px solid #cbd2d9;
+  border-radius: 6px;
+  font-family: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  resize: vertical;
+  background: #fff;
+}
+
+.block-button-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.block-field label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+  color: #5a6470;
+}
+
+.block-field input,
+.block-field select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #cbd2d9;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+}
+
+.block-image-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.block-image-field {
+  border: 1px dashed #d3d9e3;
+  border-radius: 8px;
+  padding: 12px;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.block-image-preview-container {
+  margin-bottom: 10px;
+}
+
+.block-image-preview-current,
+.block-image-preview-new {
+  text-align: center;
+}
+
+.block-image-preview-current img,
+.block-image-preview-new img {
+  width: 100%;
+  max-width: 400px;
+  max-height: 300px;
+  border-radius: 4px;
+}
+
+.block-image-preview-new {
+  background: #e8f5e9;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #4caf50;
+}
+
+.block-image-preview-current {
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.block-image-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.block-image-actions button {
+  background: #fff;
+  border: 1px solid #c5cbd6;
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.block-slider-note {
+  font-size: 12px;
+  color: #5a6470;
+  margin-top: 12px;
+}
+
+@media (max-width: 768px) {
+  .builder-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .block-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

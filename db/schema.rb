@@ -52,6 +52,26 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_24_100000) do
     t.index ["key"], name: "index_calculator_settings_on_key", unique: true
   end
 
+  create_table "cart_items", force: :cascade do |t|
+    t.bigint "cart_id", null: false
+    t.string "product_sku", null: false
+    t.integer "quantity", default: 1, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["cart_id", "product_sku"], name: "index_cart_items_on_cart_id_and_product_sku", unique: true
+    t.index ["product_sku"], name: "index_cart_items_on_product_sku"
+  end
+
+  create_table "carts", force: :cascade do |t|
+    t.string "guest_token", null: false
+    t.datetime "expires_at", null: false
+    t.bigint "promo_code_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["expires_at"], name: "index_carts_on_expires_at"
+    t.index ["guest_token"], name: "index_carts_on_guest_token", unique: true
+  end
+
   create_table "categories", force: :cascade do |t|
     t.string "ikea_id"
     t.integer "unique_id"
@@ -392,6 +412,29 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_24_100000) do
     t.index ["updated_at"], name: "index_products_on_updated_at"
   end
 
+  create_table "promo_code_products", force: :cascade do |t|
+    t.bigint "promo_code_id", null: false
+    t.string "product_sku", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["product_sku"], name: "index_promo_code_products_on_product_sku"
+    t.index ["promo_code_id", "product_sku"], name: "index_promo_code_products_on_promo_code_id_and_product_sku", unique: true
+  end
+
+  create_table "promo_codes", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name"
+    t.integer "discount_type", null: false
+    t.decimal "discount_value", precision: 12, scale: 2, null: false
+    t.boolean "active", default: true, null: false
+    t.datetime "starts_at"
+    t.datetime "ends_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["active", "ends_at"], name: "index_promo_codes_on_active_and_ends_at"
+    t.index ["code"], name: "index_promo_codes_on_code", unique: true
+  end
+
   create_table "search_query_logs", force: :cascade do |t|
     t.bigint "customer_id"
     t.string "query", null: false
@@ -429,6 +472,8 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_24_100000) do
 
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
+  add_foreign_key "cart_items", "carts"
+  add_foreign_key "carts", "promo_codes"
   add_foreign_key "category_products", "products"
   add_foreign_key "filter_values", "filters"
   add_foreign_key "home_banners", "categories", primary_key: "ikea_id", on_delete: :nullify
@@ -438,5 +483,6 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_24_100000) do
   add_foreign_key "homepage_product_block_rules", "homepage_product_blocks"
   add_foreign_key "product_filter_values", "filter_values"
   add_foreign_key "product_filter_values", "products"
+  add_foreign_key "promo_code_products", "promo_codes"
   add_foreign_key "search_query_logs", "users", column: "customer_id"
 end

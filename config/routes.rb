@@ -53,6 +53,20 @@ Rails.application.routes.draw do
       get 'homepage/slider/banners', to: 'homepage#slider_banners'
       get 'search/suggest', to: 'search#suggest'
 
+      resource :cart, only: [:show] do
+        delete :clear, on: :collection
+      end
+
+      resources :cart_items, only: [:create] do
+        patch ':sku', to: 'cart_items#update', on: :collection
+        delete ':sku', to: 'cart_items#destroy', on: :collection
+      end
+
+      namespace :cart do
+        post 'promo/apply', to: 'cart_promo#apply'
+        delete 'promo', to: 'cart_promo#remove'
+      end
+
       namespace :content do
         resources :articles, only: [:index, :show], param: :slug
       end

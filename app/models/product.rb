@@ -11,6 +11,10 @@ class Product < ApplicationRecord
   has_many :category_products, dependent: :destroy
   has_many :categories, through: :category_products, source: :category
   
+  def primary_category
+    category || categories.order(:name).first
+  end
+
   has_many :product_filter_values
   has_many :filter_values, through: :product_filter_values
   

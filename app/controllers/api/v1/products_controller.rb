@@ -20,7 +20,10 @@ module Api
       
       def show
         product = Product.find_by(sku: params[:id])
-        render json: ProductSerializer.new(product, include: [:category])
+        render json: ProductSerializer.new(product, {
+          include: [:category],
+          params: { detail: true }
+        })
       end
       
       def bestsellers

@@ -76,7 +76,7 @@ paths:
             type: string
       responses:
         '200':
-          description: Данные товара
+          description: Данные товара в подробной форме, включая breadcrumbs, если они доступны
           content:
             application/json:
               schema:
@@ -526,6 +526,11 @@ components:
               type: number
             delivery_reason:
               type: string
+            breadcrumbs:
+              type: array
+              description: Сформированные на основе primary_category цепочки для детального представления
+              items:
+                $ref: '#/components/schemas/Breadcrumb'
             variants:
               type: array
               items:
@@ -544,6 +549,14 @@ components:
             updated_at:
               type: string
               format: date-time
+
+    Breadcrumb:
+      type: object
+      properties:
+        title:
+          type: string
+        url:
+          type: string
 
     Category:
       type: object

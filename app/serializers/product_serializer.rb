@@ -6,7 +6,8 @@ class ProductSerializer
              :package_volume, :package_dimensions, :dimensions,
              :is_parcel, :is_bestseller, :is_popular, :category_id,
              :delivery_type, :delivery_name, :delivery_cost,
-             :delivery_reason, :breadcrumbs, :created_at, :updated_at
+             :delivery_reason, :breadcrumbs, :created_at, :updated_at,
+             :seo_title, :seo_h1
   
   attribute :variants do |product|
     product.variants || []
@@ -24,6 +25,14 @@ class ProductSerializer
   
   attribute :category_name do |product|
     product.category&.translated_name || product.category&.name || ''
+  end
+
+  attribute :seo_title, if: ->(_record, params) { params&.dig(:detail) } do |product|
+    Seo::ProductTitleBuilder.build(product, key: "default_title")
+  end
+
+  attribute :seo_h1, if: ->(_record, params) { params&.dig(:detail) } do |product|
+    Seo::ProductTitleBuilder.build(product, key: "default_h1")
   end
 
   attribute :breadcrumbs, if: ->(_record, params) { params&.dig(:detail) } do |product|

@@ -470,6 +470,207 @@ paths:
           description: Статья не найдена
 
 
+  /api/v1/account/reviews/available:
+    get:
+      summary: Товары, доступные для отзыва
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Список SKU, названий и изображений для доступных товаров
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        sku:
+                          type: string
+                        name:
+                          type: string
+                        images:
+                          type: array
+                          items:
+                            type: string
+                        local_images:
+                          type: array
+                          items:
+                            type: string
+
+  /api/v1/account/reviews:
+    get:
+      summary: Отзывы пользователя
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, published, rejected, hidden]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Пагинируемый список отзывов пользователя
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Review'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /api/v1/products/{product_sku}/reviews:
+    post:
+      summary: Создать отзыв на купленный товар
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: product_sku
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReviewInput'
+      responses:
+        '201':
+          description: Отзыв отправлен на модерацию
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+        '422':
+          description: Ошибка валидации (например, товар не куплен или рейтинг вне диапазона)
+
+  /api/v1/reviews/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+    patch:
+      summary: Обновить отзыв до модерации
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReviewUpdateInput'
+      responses:
+        '200':
+          description: Отзыв отредактирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+        '422':
+          description: Редактирование после модерации недоступно
+    delete:
+      summary: Удалить отзыв (soft delete после публикации)
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Отзыв скрыт или удалён
+
+  /api/v1/reviews/{id}/helpful:
+    post:
+      summary: Поставить полезность опубликованному отзыву
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Количество голосов "полезно"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReviewHelpfulResponse'
+        '404':
+          description: Отзыв не найден или не опубликован
+    delete:
+      summary: Убрать полезность отзыва
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Голос удалён
+
+  /reviews/export:
+    get:
+      summary: Экспорт отзывов (CSV/JSON)
+      tags:
+        - Reviews
+      security:
+        - BearerAuth: []
+      description: |
+        Доступны форматы CSV и JSON. JSON отдаёт массив объектов, CSV содержит перечисленные поля в шапке.
+      responses:
+        '200':
+          description: Экспортированные отзывы
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReviewExportEntry'
+        '403':
+          description: Недостаточно прав (только для админов)
+
 components:
   schemas:
     Product:
@@ -789,6 +990,130 @@ components:
                       type: string
                       example: "category"
 
+
+    Review:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        attributes:
+          type: object
+          properties:
+            product_sku:
+              type: string
+            rating:
+              type: integer
+              minimum: 1
+              maximum: 5
+            body:
+              type: string
+            status:
+              type: string
+              enum: [pending, published, rejected, hidden]
+            pinned:
+              type: boolean
+            excluded_from_rating:
+              type: boolean
+            admin_note:
+              type: string
+              nullable: true
+            helpful_count:
+              type: integer
+            created_at:
+              type: string
+              format: date-time
+            published_at:
+              type: string
+              format: date-time
+              nullable: true
+            photos:
+              type: array
+              items:
+                type: string
+            product:
+              type: object
+              properties:
+                sku:
+                  type: string
+                name:
+                  type: string
+                images:
+                  type: array
+                  items:
+                    type: string
+                local_images:
+                  type: array
+                  items:
+                    type: string
+
+    ReviewInput:
+      type: object
+      properties:
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        body:
+          type: string
+        photos:
+          type: array
+          items:
+            type: string
+            format: binary
+      required:
+        - rating
+        - body
+
+    ReviewUpdateInput:
+      allOf:
+        - $ref: '#/components/schemas/ReviewInput'
+      properties:
+        photos:
+          type: array
+          items:
+            type: string
+            format: binary
+
+    ReviewHelpfulResponse:
+      type: object
+      properties:
+        helpful_count:
+          type: integer
+
+    ReviewExportEntry:
+      type: object
+      properties:
+        review_id:
+          type: integer
+        product_sku:
+          type: string
+        user_id:
+          type: integer
+        rating:
+          type: integer
+        body:
+          type: string
+        status:
+          type: string
+        helpful_count:
+          type: integer
+        excluded_from_rating:
+          type: boolean
+        pinned:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        photos_urls:
+          type: array
+          items:
+            type: string
 
   securitySchemes:
     BearerAuth:

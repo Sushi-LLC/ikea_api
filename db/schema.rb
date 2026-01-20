@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_01_25_100000) do
+ActiveRecord::Schema[7.1].define(version: 2026_01_26_000006) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -313,6 +313,30 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_25_100000) do
     t.index ["position"], name: "index_homepage_product_blocks_on_position"
   end
 
+  create_table "order_items", force: :cascade do |t|
+    t.bigint "order_id", null: false
+    t.string "product_sku", null: false
+    t.integer "quantity", default: 1, null: false
+    t.decimal "price", precision: 12, scale: 2
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["order_id", "product_sku"], name: "index_order_items_on_order_id_and_product_sku", unique: true
+    t.index ["order_id"], name: "index_order_items_on_order_id"
+    t.index ["product_sku"], name: "index_order_items_on_product_sku"
+  end
+
+  create_table "orders", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "crm_external_id"
+    t.string "country"
+    t.integer "status", default: 0, null: false
+    t.datetime "purchased_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["crm_external_id"], name: "index_orders_on_crm_external_id"
+    t.index ["user_id"], name: "index_orders_on_user_id"
+  end
+
   create_table "parser_tasks", force: :cascade do |t|
     t.string "task_type", null: false
     t.string "status", default: "pending"
@@ -423,6 +447,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_25_100000) do
     t.string "designer_ru"
     t.text "safety_info_ru"
     t.text "good_to_know_ru"
+    t.decimal "rating_avg", precision: 4, scale: 2, default: "0.0", null: false
+    t.decimal "rating_weighted", precision: 5, scale: 2, default: "0.0", null: false
+    t.integer "rating_count", default: 0, null: false
+    t.datetime "rating_updated_at"
     t.index ["category_id"], name: "index_products_on_category_id"
     t.index ["is_bestseller"], name: "index_products_on_is_bestseller"
     t.index ["is_popular"], name: "index_products_on_is_popular"
@@ -452,6 +480,43 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_25_100000) do
     t.datetime "updated_at", null: false
     t.index ["active", "ends_at"], name: "index_promo_codes_on_active_and_ends_at"
     t.index ["code"], name: "index_promo_codes_on_code", unique: true
+  end
+
+  create_table "review_helpful_votes", force: :cascade do |t|
+    t.bigint "review_id", null: false
+    t.bigint "user_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["review_id", "user_id"], name: "index_review_helpful_votes_on_review_id_and_user_id", unique: true
+    t.index ["review_id"], name: "index_review_helpful_votes_on_review_id"
+    t.index ["user_id"], name: "index_review_helpful_votes_on_user_id"
+  end
+
+  create_table "review_settings", force: :cascade do |t|
+    t.decimal "helpful_weight_factor", precision: 5, scale: 4, default: "0.1", null: false
+    t.decimal "base_weight", precision: 5, scale: 2, default: "1.0", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "reviews", force: :cascade do |t|
+    t.bigint "user_id", null: false
+    t.string "product_sku", null: false
+    t.bigint "order_id"
+    t.integer "rating", null: false
+    t.text "body", null: false
+    t.integer "status", default: 0, null: false
+    t.datetime "published_at"
+    t.text "admin_note"
+    t.boolean "pinned", default: false, null: false
+    t.boolean "excluded_from_rating", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["order_id"], name: "index_reviews_on_order_id"
+    t.index ["product_sku"], name: "index_reviews_on_product_sku"
+    t.index ["status"], name: "index_reviews_on_status"
+    t.index ["user_id", "product_sku"], name: "index_reviews_on_user_id_and_product_sku", unique: true
+    t.index ["user_id"], name: "index_reviews_on_user_id"
   end
 
   create_table "search_query_logs", force: :cascade do |t|
@@ -500,8 +565,14 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_25_100000) do
   add_foreign_key "homepage_product_block_items", "homepage_product_blocks"
   add_foreign_key "homepage_product_block_items", "products", primary_key: "sku"
   add_foreign_key "homepage_product_block_rules", "homepage_product_blocks"
+  add_foreign_key "order_items", "orders"
+  add_foreign_key "orders", "users"
   add_foreign_key "product_filter_values", "filter_values"
   add_foreign_key "product_filter_values", "products"
   add_foreign_key "promo_code_products", "promo_codes"
+  add_foreign_key "review_helpful_votes", "reviews"
+  add_foreign_key "review_helpful_votes", "users"
+  add_foreign_key "reviews", "orders"
+  add_foreign_key "reviews", "users"
   add_foreign_key "search_query_logs", "users", column: "customer_id"
 end

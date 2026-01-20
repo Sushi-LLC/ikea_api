@@ -5,21 +5,22 @@ module Api
       
       def index
         products = Product.includes(:category)
-                         .page(params[:page])
-                         .per(params[:per_page] || 50)
+        products = products.by_rating if params[:sort] == 'rating'
+        products = products.page(params[:page]).per(params[:per_page] || 50)
         
         render json: ProductSerializer.new(products, {
           include: [:category],
           meta: {
             total: products.total_count,
             page: params[:page] || 1,
-            per_page: params[:per_page] || 50
+            per_page: params[:per_page] || 50,
+            sort: params[:sort]
           }
         })
       end
       
       def show
-        product = Product.find_by(sku: params[:id])
+        product = Product.find_by(sku: params[:sku])
         render json: ProductSerializer.new(product, {
           include: [:category],
           params: { detail: true }

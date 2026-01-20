@@ -9,6 +9,9 @@ class User < ApplicationRecord
   validates :role, inclusion: { in: %w[user admin manager] }
   
   scope :active, -> { where(is_active: true) }
+
+  has_many :orders, dependent: :nullify
+  has_many :reviews, dependent: :nullify
   
   def admin?
     role == 'admin'

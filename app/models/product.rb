@@ -22,6 +22,7 @@ class Product < ApplicationRecord
   scope :bestsellers, -> { where(is_bestseller: true) }
   scope :popular, -> { where(is_popular: true) }
   scope :with_category, -> { where.not(category_id: nil) }
+  scope :by_rating, -> { order(rating_weighted: :desc, rating_count: :desc) }
   
   # Сериализация массивов
   serialize :variants, coder: JSON

@@ -21,10 +21,27 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       # Products
-      resources :products, only: [:index, :show] do
+      resources :products, only: [:index, :show], param: :sku do
         collection do
           get :bestsellers
           get :popular
+        end
+
+        resources :reviews, only: [:create]
+      end
+
+      resources :reviews, only: [:update, :destroy] do
+        member do
+          post :helpful
+          delete :helpful, action: :remove_helpful
+        end
+      end
+
+      namespace :account do
+        resources :reviews, only: [:index] do
+          collection do
+            get :available
+          end
         end
       end
       
@@ -76,4 +93,6 @@ Rails.application.routes.draw do
       end
     end
   end
+
+  get '/reviews/export(.:format)', to: 'reviews_exports#index'
 end

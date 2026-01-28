@@ -6,18 +6,33 @@ info:
     API для работы с данными IKEA парсера.
     
     ## Аутентификация
-    Большинство endpoints требуют JWT токен в заголовке:
-    ```
-    Authorization: Bearer <token>
-    ```
+    Большинство эндпоинтов для получения данных (товары, категории, главная страница) являются **публичными** и не требуют токена.
+    
+    JWT токен в заголовке `Authorization: Bearer <token>` требуется только для действий, связанных с пользователем (отзывы, личный кабинет).
+    
+    **Публичные эндпоинты (Без токена):**
+    - `GET /api/v1/products` — Список товаров
+    - `GET /api/v1/products/{sku}` — Карточка товара
+    - `GET /api/v1/products/bestsellers` — Бестселлеры
+    - `GET /api/v1/products/popular` — Популярные товары
+    - `GET /api/v1/categories` — Категории
+    - `GET /api/v1/homepage/slider/main` — Слайдер на главной
+    - `POST /api/v1/auth/login` — Вход
+    - `POST /api/v1/auth/register` — Регистрация
+    
+    **Приватные эндпоинты (Требуется Bearer Token):**
+    - `POST /api/v1/products/{sku}/reviews` — Оставить отзыв
+    - `GET /api/v1/account/reviews` — Мои отзывы
+    - `PATCH/DELETE /api/v1/reviews/{id}` — Управление своими отзывами
     
     Получить токен можно через `/api/v1/auth/login`
 
+
 servers:
+  - url: http://45.135.234.22
+    description: Production server (IP)
   - url: http://localhost:3000
     description: Development server
-  - url: https://api.ikeya.by
-    description: Production server
 
 paths:
   /api/v1/products:

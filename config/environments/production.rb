@@ -30,6 +30,7 @@ Rails.application.configure do
   # В production можно вернуть кеширование после проверки
   config.assets.digest = true
   config.assets.version = '1.0'
+  config.assets.prefix = '/admin-assets'
 
   # Enable serving of images, stylesheets, and JavaScripts from an asset server.
   # config.asset_host = "http://assets.example.com"

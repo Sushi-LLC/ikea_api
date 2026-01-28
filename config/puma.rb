@@ -11,9 +11,13 @@ max_threads_count = ENV.fetch("RAILS_MAX_THREADS") { 5 }
 min_threads_count = ENV.fetch("RAILS_MIN_THREADS") { max_threads_count }
 threads min_threads_count, max_threads_count
 
+# Bindings
 rails_env = ENV.fetch("RAILS_ENV") { "development" }
 
 if rails_env == "production"
+  # Bind to TCP-port, fallback to unix if explicitly provided.
+  bind ENV.fetch("PUMA_BIND", "tcp://0.0.0.0:3001")
+
   # If you are running more than 1 thread per process, the workers count
   # should be equal to the number of processors (CPU cores) in production.
   #
@@ -26,26 +30,14 @@ if rails_env == "production"
   else
     preload_app!
   end
-end
-# Specifies the `worker_timeout` threshold that Puma will use to wait before
-# terminating a worker in development environments.
-worker_timeout 3600 if ENV.fetch("RAILS_ENV", "development") == "development"
-
-# Specifies the `port` that Puma will listen on to receive requests; default is 3000.
-# В production используем Unix socket для лучшей производительности
-# Capistrano3-puma плагин автоматически устанавливает bind через переменные окружения
-if rails_env == "production"
-  # Если PUMA_BIND установлен (Capistrano или systemd), используем его
-  if ENV["PUMA_BIND"]
-    bind ENV["PUMA_BIND"]
-  else
-    # Fallback для ручного запуска - используем абсолютный путь
-    shared_path = File.expand_path("../../../shared", __dir__)
-    bind "unix://#{shared_path}/tmp/sockets/puma.sock"
-  end
 else
+  # Specifies the `port` that Puma will listen on to receive requests; default is 3000.
   port ENV.fetch("PORT") { 3000 }
 end
+
+# Specifies the `worker_timeout` threshold that Puma will use to wait before
+# terminating a worker in development environments.
+worker_timeout 3600 if rails_env == "development"
 
 # Specifies the `environment` that Puma will run in.
 environment rails_env

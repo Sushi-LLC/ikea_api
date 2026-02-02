@@ -17,7 +17,7 @@ set :keep_releases, 5
 append :linked_files, "config/master.key", ".env"
 
 # Linked directories (shared between deployments)
-append :linked_dirs, "log", "tmp/pids", "tmp/cache", "tmp/sockets", "storage"
+append :linked_dirs, "log", "tmp/pids", "tmp/cache", "tmp/sockets", 'public/system', 'storage', 'public/images'
 # НЕ линкуем public/assets - они должны компилироваться в каждом release
 # append :linked_dirs, "public/assets"
 

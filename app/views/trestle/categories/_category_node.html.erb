@@ -46,6 +46,12 @@
                   title: "Просмотр" do %>
         <i class="fa fa-eye"></i>
       <% end %>
+
+      <%= link_to edit_categories_admin_path(category.ikea_id),
+                  class: "btn btn-sm btn-outline-primary",
+                  title: "Редактировать" do %>
+        <i class="fa fa-pencil"></i>
+      <% end %>
       
       <%= form_with url: toggle_active_categories_admin_path(category.ikea_id), 
                     method: :post, 

@@ -110,7 +110,9 @@
                 </div>
               <% end %>
 
-              <% if @category.remote_image_url.present? %>
+              <%
+=begin%>
+ <% if @category.remote_image_url.present? %>
                 <div class="mb-3">
                   <h6>Удалённая картинка</h6>
                   <%= link_to @category.remote_image_url, target: '_blank', title: @category.remote_image_url do %>
@@ -120,16 +122,22 @@
                     <%= link_to @category.remote_image_url, @category.remote_image_url, target: '_blank', class: 'text-break' %>
                   </p>
                 </div>
-              <% end %>
+              <% end %> 
+<%
+=end%>
             </div>
           <% else %>
             <p class="text-muted">Картинка не загружена</p>
-            <% if @category.remote_image_url.blank? %>
+            <%
+=begin%>
+ <% if @category.remote_image_url.blank? %>
               <p class="text-muted small">Нет удалённого URL картинки</p>
             <% end %>
             <% if @category.local_image_path.blank? && @category.remote_image_url.present? %>
               <p class="text-muted small">Удалённая картинка есть, но локальная не загружена. Запустите загрузку картинок категорий.</p>
-            <% end %>
+            <% end %> 
+<%
+=end%>
           <% end %>
         </div>
       </div>

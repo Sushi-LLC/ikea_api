@@ -83,11 +83,23 @@ class FetchProductExtendedAttributesJob < ApplicationJob
     return { updated: false } unless product.url.present?
     
     Rails.logger.info "FetchProductExtendedAttributesJob: Fetching extended attributes for #{product.sku} from #{product.url}"
-    
-    # Получаем расширенные параметры через PlDetailsFetcher
-    pl_details = PlDetailsFetcher.fetch(product.url)
-    Rails.logger.info "FetchProductExtendedAttributesJob: PL details fetched for #{product.sku}: #{pl_details.present? ? 'present' : 'empty'}"
-    
+
+    Rails.logger.info "FetchProductExtendedAttributesJob: Trying PL fetch without headless for #{product.sku}"
+    headless_allowed = pl_headless_enabled?
+    pl_details = PlDetailsFetcher.fetch(product.url, use_headless: false) || {}
+
+    if !pl_modal_fields_complete?(pl_details)
+      if headless_allowed
+        Rails.logger.info "FetchProductExtendedAttributesJob: PL fetch without headless incomplete -> trying headless"
+        headless_details = PlDetailsFetcher.fetch(product.url, use_headless: true)
+        pl_details = headless_details if headless_details.present?
+      else
+        Rails.logger.info "FetchProductExtendedAttributesJob: Headless disabled by PL_FETCHER_ENABLE_HEADLESS"
+      end
+    end
+
+    Rails.logger.info "FetchProductExtendedAttributesJob: PL details final: #{pl_details.present? ? 'present' : 'empty'} (materials: #{pl_details[:materials].present?}, care_instructions: #{pl_details[:care_instructions].present?}, safety_info: #{pl_details[:safety_info].present?})"
+
     return { updated: false } unless pl_details.present?
     
     attributes = {}
@@ -365,6 +377,18 @@ class FetchProductExtendedAttributesJob < ApplicationJob
       Rails.logger.info "FetchProductExtendedAttributesJob: No extended attributes to update for #{product.sku}"
       { updated: false }
     end
+  end
+
+  def pl_modal_fields_complete?(details)
+    details.present? &&
+      details[:materials].present? &&
+      details[:care_instructions].present? &&
+      details[:safety_info].present?
+  end
+
+  def pl_headless_enabled?
+    env_value = ENV.fetch('PL_FETCHER_ENABLE_HEADLESS', 'true').to_s.downcase
+    %w[true 1 yes].include?(env_value)
   end
 end
 

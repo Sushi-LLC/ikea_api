@@ -143,10 +143,22 @@
                 <td><%= @product.materials %></td>
               </tr>
             <% end %>
+            <% if @product.materials_ru.present? %>
+              <tr>
+                <th>Материалы (RU):</th>
+                <td><%= @product.materials_ru %></td>
+              </tr>
+            <% end %>
             <% if @product.features.present? %>
               <tr>
                 <th>Особенности:</th>
                 <td><%= @product.features %></td>
+              </tr>
+            <% end %>
+            <% if @product.features_ru.present? %>
+              <tr>
+                <th>Особенности (RU):</th>
+                <td><%= @product.features_ru %></td>
               </tr>
             <% end %>
             <% if @product.care_instructions.present? %>
@@ -155,16 +167,28 @@
                 <td><%= @product.care_instructions %></td>
               </tr>
             <% end %>
+            <% if @product.care_instructions_ru.present? %>
+              <tr>
+                <th>Инструкции по уходу (RU):</th>
+                <td><%= @product.care_instructions_ru %></td>
+              </tr>
+            <% end %>
             <% if @product.environmental_info.present? %>
               <tr>
                 <th>Экологическая информация:</th>
                 <td><%= @product.environmental_info %></td>
               </tr>
             <% end %>
-            <% if @product.short_description.present? %>
+            <% if @product.environmental_info_ru.present? %>
+              <tr>
+                <th>Экологическая информация (RU):</th>
+                <td><%= @product.environmental_info_ru %></td>
+              </tr>
+            <% end %>
+            <% if @product.short_description_ru.present? %>
               <tr>
                 <th>Краткое описание:</th>
-                <td><%= @product.short_description %></td>
+                <td><%= @product.short_description_ru %></td>
               </tr>
             <% end %>
             <% if @product.designer.present? %>
@@ -173,16 +197,34 @@
                 <td><%= @product.designer %></td>
               </tr>
             <% end %>
+            <% if @product.designer_ru.present? %>
+              <tr>
+                <th>Дизайнер (RU):</th>
+                <td><%= @product.designer_ru %></td>
+              </tr>
+            <% end %>
             <% if @product.safety_info.present? %>
               <tr>
                 <th>Информация о безопасности:</th>
                 <td><%= @product.safety_info %></td>
               </tr>
             <% end %>
-            <% if @product.good_to_know.present? %>
+            <% if @product.safety_info_ru.present? %>
+              <tr>
+                <th>Информация о безопасности (RU):</th>
+                <td><%= @product.safety_info_ru %></td>
+              </tr>
+            <% end %>
+            <% if @product.good_info.present? %>
               <tr>
                 <th>Полезно знать:</th>
-                <td><%= @product.good_to_know %></td>
+                <td><%= @product.good_info %></td>
+              </tr>
+            <% end %>
+            <% if @product.good_info_ru.present? %>
+              <tr>
+                <th>Полезно знать (RU):</th>
+                <td><%= @product.good_info_ru %></td>
               </tr>
             <% end %>
           </table>

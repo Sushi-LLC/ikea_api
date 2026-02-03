@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sample IKEA PIPF</title>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": "SKOENABAECK",
+        "mpn": "70582542",
+        "image": ["https://example.com/a.jpg"],
+        "offers": {"price": "1999"}
+      }
+    </script>
+  </head>
+  <body>
+    <div class="pipf-accordion">
+      <section class="pipf-accordion__item" id="product-details-info">
+        <div class="pipf-accordion__header">
+          <span role="heading" aria-level="2">Informacje o produkcie</span>
+        </div>
+        <div class="pipf-accordion__content">
+          <p>Ta sofa jest wygodna i łatwa do rozkładania.</p>
+          <p>Pokrowiec można łatwo zdjąć i wyprać.</p>
+        </div>
+      </section>
+
+      <section class="pipf-accordion__item" id="product-details-dimensions">
+        <div class="pipf-accordion__header">
+          <span role="heading" aria-level="2">Wymiary</span>
+        </div>
+        <div class="pipf-accordion__content">
+          <ul>
+            <li>Szerokość: 158 cm</li>
+            <li>Głębokość: 75 cm</li>
+            <li>Wysokość: 74 cm</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="pipf-accordion__item" id="product-details-materials-care">
+        <div class="pipf-accordion__header">
+          <span role="heading" aria-level="2">Materiały i pielęgnacja</span>
+        </div>
+        <div class="pipf-accordion__content">
+          <dl>
+            <dt>Rama</dt>
+            <dd>Stal</dd>
+            <dt>Tkanina</dt>
+            <dd>100% poliester</dd>
+          </dl>
+          <ul>
+            <li>Odkurzać regularnie.</li>
+            <li>Prać w temp. 40°C.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="pipf-accordion__item" id="product-details-safety">
+        <div class="pipf-accordion__header">
+          <span role="heading" aria-level="2">Bezpieczeństwo i zgodność</span>
+        </div>
+        <div class="pipf-accordion__content">
+          <ul>
+            <li>Nie stawać na sofie.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="pipf-accordion__item" id="product-details-good">
+        <div class="pipf-accordion__header">
+          <span role="heading" aria-level="2">Dobrze wiedzieć</span>
+        </div>
+        <div class="pipf-accordion__content">
+          <ul>
+            <li>W zestawie komplet śrub.</li>
+          </ul>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

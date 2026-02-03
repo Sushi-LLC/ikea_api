@@ -30,6 +30,15 @@ namespace :parser do
     puts "Задача поставлена в очередь"
   end
 
+  desc "Загрузить расширенные атрибуты продуктов"
+  task :fetch_extended_attributes, [:limit, :sku] => :environment do |_t, args|
+    limit = args[:limit]&.to_i
+    sku = args[:sku]
+    puts "Запуск загрузки расширенных атрибутов продуктов (лимит: #{limit || 'без ограничений'}, sku: #{sku || 'все'})..."
+    FetchProductExtendedAttributesJob.perform_later(limit: limit, product_id: sku)
+    puts "Задача поставлена в очередь"
+  end
+
   desc "Запустить парсинг хитов продаж"
   task :parse_bestsellers, [:limit] => :environment do |_t, args|
     limit = args[:limit]&.to_i

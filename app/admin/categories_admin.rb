@@ -99,21 +99,21 @@ Trestle.resource(:categories, model: Category) do
       @category = admin.find_instance(params)
       @category.update(is_deleted: !@category.is_deleted)
       clear_categories_cache
-      redirect_to admin.categories_path, notice: "Категория #{@category.is_deleted? ? 'отключена' : 'включена'}"
+      redirect_to '/admin/categories', notice: "Категория #{@category.is_deleted? ? 'отключена' : 'включена'}"
     end
 
     def toggle_popular
       @category = admin.find_instance(params)
       @category.update(is_popular: !@category.is_popular)
       clear_categories_cache
-      redirect_to admin.categories_path, notice: "Категория #{@category.is_popular? ? 'добавлена в популярные' : 'удалена из популярных'}"
+      redirect_to '/admin/categories', notice: "Категория #{@category.is_popular? ? 'добавлена в популярные' : 'удалена из популярных'}"
     end
 
     def soft_delete
       @category = admin.find_instance(params)
       @category.update(is_deleted: true)
       clear_categories_cache
-      redirect_to admin.categories_path, notice: "Категория отключена (мягкое удаление)"
+      redirect_to '/admin/categories', notice: "Категория отключена (мягкое удаление)"
     end
 
     private
@@ -200,13 +200,15 @@ Trestle.resource(:categories, model: Category) do
   end
 
   form do |category|
-    text_field :ikea_id
+    if category.persisted?
+      text_field :ikea_id, readonly: true
+    else
+      text_field :ikea_id
+    end
+  
     text_field :name
     text_field :translated_name
     check_box :is_popular
     check_box :is_deleted
-    text_area :parent_ids, label: "Parent IDs (JSON)"
   end
-
 end
-

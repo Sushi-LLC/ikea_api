@@ -3,25 +3,43 @@ require 'nokogiri'
 require 'net/http'
 require 'uri'
 require 'ferrum'
+require 'fileutils'
+require 'securerandom'
+require 'json'
+require 'tmpdir'
 
 class PlDetailsFetcher
-  def self.fetch(url)
-    new.fetch(url)
+  def self.fetch(url, use_headless: true)
+    new.fetch(url, use_headless: use_headless)
   end
-  
+
   # Парсинг готового HTML (например, полученного через scrape.do)
-  def self.parse_html(html, url = nil)
-    new.parse_html(html, url)
+  def self.parse_html(html, url = nil, use_headless: true)
+    new.parse_html(html, url, use_headless: use_headless)
   end
   
-  def fetch(url)
+  def fetch(url, use_headless: true)
     full_url = url.start_with?('http') ? url : "https://www.ikea.com#{url}"
-    
+
+    # 1) Fast path: direct fetch via rotating proxies
     html = fetch_with_proxy(full_url)
-    parse_html(html, full_url)
+    parsed = parse_html(html, full_url, use_headless: use_headless)
+
+    # 2) Fallback: remote JS rendering via scrape.do (still HTTP + HTML parsing)
+    # Useful when IKEA returns minimal non-hydrated HTML.
+    if should_fallback_to_js_render?(parsed, html)
+      rendered_html = fetch_via_scrape_do(full_url)
+      if rendered_html.present? && rendered_html.length > html.to_s.length
+        rendered = parse_html(rendered_html, full_url, use_headless: use_headless)
+        # Prefer the version that has more extended fields.
+        return choose_best_parse(parsed, rendered)
+      end
+    end
+
+    parsed
   end
   
-  def parse_html(html, url = nil)
+  def parse_html(html, url = nil, use_headless: true)
     return {} unless html.present?
     
     full_url = url || 'https://www.ikea.com/pl/pl/'
@@ -84,6 +102,12 @@ class PlDetailsFetcher
     Rails.logger.info "PlDetailsFetcher: Packaging info extracted - weight: #{packaging_info[:weight]}, dimensions: #{packaging_info[:dimensions]}"
     
     # Product description and extended attributes (обязательно вызываем)
+    # NOTE: On the new IKEA PIPF pages, some sections are displayed inside
+    # UI "sheets" that become visible only after clicking a button in the UI.
+    # However, for many products the section content is already present in the
+    # initial HTML response (as normal headings + content blocks). We therefore
+    # extract key sections by their headings (e.g. "Informacje o produkcie",
+    # "Wymiary", etc.) even when the modal DOM is not present.
     description_data = extract_product_description(doc, product_data)
     result.merge!(description_data)
     Rails.logger.info "PlDetailsFetcher: Description data extracted - description: #{description_data[:description].present?}, materials: #{description_data[:materials].present?}"
@@ -105,7 +129,7 @@ class PlDetailsFetcher
     modal_data = extract_modal_details(doc)
     
     # Если модальное окно не найдено или данные неполные, используем headless браузер
-    if modal_data[:materials].blank? || modal_data[:care_instructions].blank? || modal_data[:safety_info].blank?
+    if use_headless && (modal_data[:materials].blank? || modal_data[:care_instructions].blank? || modal_data[:safety_info].blank?)
       Rails.logger.info "PlDetailsFetcher: Modal data incomplete, trying headless browser"
       headless_modal_data = fetch_modal_with_headless_browser(full_url)
       modal_data.merge!(headless_modal_data) if headless_modal_data.present?
@@ -117,6 +141,91 @@ class PlDetailsFetcher
   end
   
   private
+
+  # Decide when it makes sense to re-fetch the product page with remote
+  # JavaScript rendering (scrape.do). This keeps the default path cheap/fast
+  # but still recovers when IKEA returns a mostly-empty skeleton.
+  def should_fallback_to_js_render?(parsed, html)
+    return false unless ENV['SCRAPE_DO_API_TOKEN'].present?
+
+    # If we don't have even the basic schema, or the page is suspiciously short.
+    basic_missing = parsed.blank? || parsed[:name].blank? || parsed[:sku].blank?
+    html_too_short = html.to_s.length < 5_000
+
+    # If extended attributes are missing (common when the page is not hydrated).
+    extended_missing = parsed[:description].blank? && parsed[:materials].blank? && parsed[:care_instructions].blank? && parsed[:dimensions].blank?
+
+    basic_missing || html_too_short || extended_missing
+  end
+
+  # Choose the better parse between two versions of the same page.
+  # We score by how many extended attributes are present.
+  def choose_best_parse(a, b)
+    return b if a.blank?
+    return a if b.blank?
+
+    score = ->(h) do
+      keys = %i[description short_description materials care_instructions safety_info good_to_know dimensions package_dimensions weight]
+      keys.count { |k| h[k].present? }
+    end
+
+    score_a = score.call(a)
+    score_b = score.call(b)
+
+    Rails.logger.info "PlDetailsFetcher: choose_best_parse scores - direct: #{score_a}, rendered: #{score_b}"
+    score_b >= score_a ? b : a
+  end
+
+  # Fetch HTML via scrape.do with server-side JS rendering.
+  # Still HTTP (no local browser), but returns hydrated DOM that often contains
+  # the same data users see after clicking the UI.
+  def fetch_via_scrape_do(url)
+    api_token = ENV.fetch('SCRAPE_DO_API_TOKEN')
+    api_url = ENV.fetch('SCRAPE_DO_API_URL', 'https://api.scrape.do/')
+
+    ProxyRotator.with_proxy_retry do |proxy_options|
+      uri = URI.parse(api_url)
+
+      if proxy_options && proxy_options[:http_proxyaddr]
+        http = Net::HTTP.new(uri.host, uri.port,
+                             proxy_options[:http_proxyaddr],
+                             proxy_options[:http_proxyport],
+                             proxy_options[:http_proxyuser],
+                             proxy_options[:http_proxypass])
+      else
+        http = Net::HTTP.new(uri.host, uri.port)
+      end
+
+      http.use_ssl = true
+      http.read_timeout = 90
+      http.open_timeout = 45
+
+      params = {
+        'token' => api_token,
+        'url' => url,
+        'format' => 'html',
+        'render' => 'true',
+        'wait' => ENV.fetch('SCRAPE_DO_WAIT_MS', '5000')
+      }
+
+      request_uri = "#{uri.path}?#{URI.encode_www_form(params)}"
+      request = Net::HTTP::Get.new(request_uri)
+      request['User-Agent'] = ENV.fetch('USER_AGENT', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+      request['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      request['Accept-Language'] = ENV.fetch('ACCEPT_LANGUAGE', 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7,ru;q=0.6')
+
+      response = http.request(request)
+
+      unless response.is_a?(Net::HTTPSuccess)
+        raise StandardError, "Scrape.do API error: HTTP #{response.code} #{response.message}"
+      end
+
+      response.body
+    end
+  rescue => e
+    Rails.logger.error "PlDetailsFetcher.fetch_via_scrape_do: Failed: #{e.class} - #{e.message}"
+    nil
+  end
   
   def fetch_with_proxy(url)
     ProxyRotator.with_proxy_retry do |proxy_options|
@@ -135,13 +244,47 @@ class PlDetailsFetcher
       http.use_ssl = uri.scheme == 'https'
       http.read_timeout = 30
       
-      request = Net::HTTP::Get.new(uri.path)
+      # Use request_uri to preserve query string (uri.path would drop it)
+      request = Net::HTTP::Get.new(uri.request_uri)
       request['User-Agent'] = ENV.fetch('USER_AGENT', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+      request['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+      request['Accept-Language'] = ENV.fetch('ACCEPT_LANGUAGE', 'pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7,ru;q=0.6')
+      request['Accept-Encoding'] = 'gzip,deflate'
       
       response = http.request(request)
-      
+
+      # Follow redirects (IKEA sometimes redirects by geo/cookies)
+      if response.is_a?(Net::HTTPRedirection)
+        location = response['location']
+        raise StandardError, "Redirect without location" if location.blank?
+        return fetch_with_proxy(URI.join(url, location).to_s)
+      end
+
       if response.is_a?(Net::HTTPSuccess)
-        response.body
+        body = response.body
+
+        # Decompress gzip/deflate if needed
+        encoding = response['content-encoding'].to_s.downcase
+        if encoding.include?('gzip')
+          begin
+            require 'zlib'
+            require 'stringio'
+            gz = Zlib::GzipReader.new(StringIO.new(body))
+            body = gz.read
+            gz.close
+          rescue => e
+            Rails.logger.warn "PlDetailsFetcher.fetch_with_proxy: Failed to gunzip response: #{e.message}"
+          end
+        elsif encoding.include?('deflate')
+          begin
+            require 'zlib'
+            body = Zlib::Inflate.inflate(body)
+          rescue => e
+            Rails.logger.warn "PlDetailsFetcher.fetch_with_proxy: Failed to inflate response: #{e.message}"
+          end
+        end
+
+        body
       else
         raise StandardError, "HTTP error: #{response.code} #{response.message}"
       end
@@ -152,53 +295,191 @@ class PlDetailsFetcher
   def fetch_modal_with_headless_browser(url)
     result = {}
     browser = nil
-    
+    extension_dir = nil
+
+    proxy_options = ProxyRotator.get_proxy
+    unless proxy_options
+      Rails.logger.warn "PlDetailsFetcher.fetch_modal_with_headless_browser: Skipping headless browser because PROXY_LIST is empty"
+      return {}
+    end
+
     begin
       Rails.logger.info "PlDetailsFetcher.fetch_modal_with_headless_browser: Starting headless browser for #{url}"
-      
-      # Получаем прокси для headless браузера
-      proxy_options = ProxyRotator.get_proxy
-      proxy_string = nil
-      
-      if proxy_options && proxy_options[:http_proxyaddr]
-        proxy_string = "#{proxy_options[:http_proxyaddr]}:#{proxy_options[:http_proxyport]}"
-        if proxy_options[:http_proxyuser] && proxy_options[:http_proxypass]
-          proxy_string = "#{proxy_options[:http_proxyuser]}:#{proxy_options[:http_proxypass]}@#{proxy_string}"
+      proxy_host = nil
+      proxy_port = nil
+      proxy_user = nil
+      proxy_pass = nil
+
+      case proxy_options
+      when String
+        s = proxy_options.strip
+        s = "http://#{s}" unless s.include?("://")
+
+        begin
+          u = URI.parse(s)
+          proxy_host = u.host
+          proxy_port = u.port
+          proxy_user = u.user
+          proxy_pass = u.password
+        rescue URI::InvalidURIError
+          # fallback: вручную пытаемся разобрать user:pass@host:port или host:port
+          s = s.sub(/\Ahttps?:\/\//, "")
+          if s.include?("@")
+            creds, hp = s.split("@", 2)
+            proxy_user, proxy_pass = creds.split(":", 2)
+            proxy_host, proxy_port = hp.split(":", 2)
+          else
+            proxy_host, proxy_port = s.split(":", 2)
+          end
+          proxy_port = proxy_port.to_i if proxy_port
         end
-        Rails.logger.debug "PlDetailsFetcher.fetch_modal_with_headless_browser: Using proxy: #{proxy_options[:http_proxyaddr]}:#{proxy_options[:http_proxyport]}"
+
+      when Hash
+        # поддержим разные варианты ключей
+        proxy_host = proxy_options[:http_proxyaddr] || proxy_options[:host]
+        proxy_port = proxy_options[:http_proxyport] || proxy_options[:port]
+        proxy_user = proxy_options[:http_proxyuser] || proxy_options[:user]
+        proxy_pass = proxy_options[:http_proxypass] || proxy_options[:pass]
+
+        # если вдруг server в виде строки
+        if (proxy_host.blank? || proxy_port.blank?) && proxy_options[:server].present?
+          s = proxy_options[:server].to_s.strip
+          s = "http://#{s}" unless s.include?("://")
+          u = URI.parse(s)
+          proxy_host ||= u.host
+          proxy_port ||= u.port
+          proxy_user ||= u.user
+          proxy_pass ||= u.password
+        end
       end
-      
+
+      proxy_host = proxy_host.to_s.strip if proxy_host
+      proxy_port = proxy_port.to_i if proxy_port
+
+      proxy_string = nil
+      if proxy_host.present? && proxy_port.to_i > 0
+        # Chrome proxy-server должен быть ТОЛЬКО host:port
+        proxy_string = "#{proxy_host}:#{proxy_port}"
+
+        Rails.logger.debug "PlDetailsFetcher.fetch_modal_with_headless_browser: Using proxy for Chrome: #{proxy_string} (auth=#{proxy_user.present?})"
+
+        if proxy_user.present? && proxy_pass.present?
+          # создаём extension для прокси-авторизации
+          # ИСПОЛЬЗУЕМ PROJECT TMP DIR для совместимости со Snap (используем Rails.root если доступен)
+          tmp_base = defined?(Rails) ? Rails.root.join("tmp").to_s : File.join(Dir.pwd, "tmp")
+          extension_dir = File.join(tmp_base, "chrome-proxy-auth-#{SecureRandom.hex(8)}")
+          FileUtils.mkdir_p(extension_dir)
+
+          manifest = {
+            "version" => "1.0.0",
+            "manifest_version" => 2,
+            "name" => "Proxy Auth Extension",
+            "permissions" => [
+              "proxy",
+              "tabs",
+              "unlimitedStorage",
+              "storage",
+              "<all_urls>",
+              "webRequest",
+              "webRequestBlocking"
+            ],
+            "background" => { "scripts" => ["background.js"] },
+            "minimum_chrome_version" => "22.0.0"
+          }
+
+          background = <<~JS
+            var config = {
+              mode: "fixed_servers",
+              rules: {
+                singleProxy: {
+                  scheme: "http",
+                  host: "#{proxy_host}",
+                  port: parseInt("#{proxy_port}")
+                },
+                bypassList: ["localhost", "127.0.0.1"]
+              }
+            };
+
+            chrome.proxy.settings.set({value: config, scope: "regular"}, function() {});
+
+            function callbackFn(details) {
+              return {
+                authCredentials: {
+                  username: "#{proxy_user}",
+                  password: "#{proxy_pass}"
+                }
+              };
+            }
+
+            chrome.webRequest.onAuthRequired.addListener(
+              callbackFn,
+              {urls: ["<all_urls>"]},
+              ["blocking"]
+            );
+          JS
+
+          File.write(File.join(extension_dir, "manifest.json"), JSON.pretty_generate(manifest))
+          File.write(File.join(extension_dir, "background.js"), background)
+        end
+      else
+        Rails.logger.warn "PlDetailsFetcher.fetch_modal_with_headless_browser: Proxy host/port missing"
+        return {}
+      end
+
       browser_options = {
-        'no-sandbox' => nil,
-        'disable-dev-shm-usage' => nil,
-        'disable-gpu' => nil,
-        'disable-software-rasterizer' => nil,
-        'disable-extensions' => nil,
-        'disable-background-networking' => nil,
-        'disable-background-timer-throttling' => nil,
-        'disable-backgrounding-occluded-windows' => nil,
-        'disable-breakpad' => nil,
-        'disable-client-side-phishing-detection' => nil,
-        'disable-default-apps' => nil,
-        'disable-hang-monitor' => nil,
-        'disable-popup-blocking' => nil,
-        'disable-prompt-on-repost' => nil,
-        'disable-sync' => nil,
-        'disable-translate' => nil,
-        'metrics-recording-only' => nil,
-        'no-first-run' => nil,
-        'safebrowsing-disable-auto-update' => nil,
-        'password-store=basic' => nil,
-        'use-mock-keychain' => nil
+        "no-sandbox" => nil,
+        "disable-dev-shm-usage" => nil,
+        "disable-gpu" => nil,
+        "disable-software-rasterizer" => nil,
+        "disable-extensions" => nil, # <-- ВАЖНО: ЭТУ СТРОКУ НЕЛЬЗЯ оставлять, если мы грузим extension
+        "disable-background-networking" => nil,
+        "disable-background-timer-throttling" => nil,
+        "disable-backgrounding-occluded-windows" => nil,
+        "disable-breakpad" => nil,
+        "disable-client-side-phishing-detection" => nil,
+        "disable-default-apps" => nil,
+        "disable-hang-monitor" => nil,
+        "disable-popup-blocking" => nil,
+        "disable-prompt-on-repost" => nil,
+        "disable-sync" => nil,
+        "disable-translate" => nil,
+        "metrics-recording-only" => nil,
+        "no-first-run" => nil,
+        "safebrowsing-disable-auto-update" => nil,
+        "password-store=basic" => nil,
+        "use-mock-keychain" => nil,
+        "window-size" => "1366,768"
       }
-      
-      browser_options['proxy-server'] = proxy_string if proxy_string
-      
-      browser = Ferrum::Browser.new(
-        headless: true,
-        browser_options: browser_options,
-        timeout: 60
-      )
+
+      # ВАЖНО:
+      # если extension_dir есть — НЕ надо включать "disable-extensions"
+      # иначе Chrome просто не загрузит auth-extension
+      if extension_dir
+        browser_options.delete("disable-extensions")
+      end
+
+      browser_options["proxy-server"] = proxy_string if proxy_string
+
+      if extension_dir
+        browser_options["load-extension"] = extension_dir
+        browser_options["disable-extensions-except"] = extension_dir
+      end
+
+      # ИСПОЛЬЗУЕМ headless=new для поддержки расширений в headless режиме
+      if full_browser_mode?
+        Rails.logger.info "PlDetailsFetcher.fetch_modal_with_headless_browser: Running in full browser mode (headless disabled)"
+      else
+        browser_options["headless"] = "new"
+      end
+
+      opts = { 
+        headless: false, # Отключаем стандартный флаг --headless, используем --headless=new через browser_options
+        timeout: 60 
+      }
+      path = ENV["CHROME_PATH"]
+      opts[:browser_path] = path if path && path != ""
+
+      browser = Ferrum::Browser.new(browser_options: browser_options, **opts)
       
       # Устанавливаем User-Agent для обхода защиты
       browser.headers.set({
@@ -353,13 +634,26 @@ class PlDetailsFetcher
       
       Rails.logger.info "PlDetailsFetcher.fetch_modal_with_headless_browser: Extracted - materials: #{result[:materials].present?}, care: #{result[:care_instructions].present?}, safety: #{result[:safety_info].present?}, good_to_know: #{result[:good_to_know].present?}"
       
-      browser.quit
       result
       
+    rescue Ferrum::StatusError => e
+      Rails.logger.error "PlDetailsFetcher.fetch_modal_with_headless_browser: Error: #{e.class} - #{e.message}\n#{e.backtrace.first(5).join("\n")}"
+      {}
     rescue => e
       Rails.logger.error "PlDetailsFetcher.fetch_modal_with_headless_browser: Error: #{e.class} - #{e.message}\n#{e.backtrace.first(5).join("\n")}"
-      browser&.quit rescue nil
       {}
+    ensure
+      if browser
+        begin
+          browser.quit
+        rescue
+          # ignore
+        end
+      end
+
+      if extension_dir && Dir.exist?(extension_dir)
+        FileUtils.rm_rf(extension_dir)
+      end
     end
   end
   
@@ -1064,12 +1358,18 @@ class PlDetailsFetcher
       break if modal
     end
     
-    # Если модальное окно не найдено, ищем данные в скриптах и по всему документу
+    # Если модальное окно не найдено, извлекаем данные напрямую из секций страницы.
+    # На новых страницах IKEA (PIPF) модальный контейнер (sheet/dialog) создаётся
+    # только после клика, но контент разделов часто уже присутствует в HTML
+    # (как обычные заголовки + блоки текста).
     if modal.nil?
-      Rails.logger.debug "PlDetailsFetcher.extract_modal_details: Modal not found in HTML, searching in scripts and document"
-      # Ищем данные в скриптах (модальное окно может быть загружено через JS)
-      extract_from_scripts(doc, result)
-      modal = doc # Используем весь документ для поиска
+      Rails.logger.debug "PlDetailsFetcher.extract_modal_details: Modal not found in HTML, trying section-based extraction"
+      extract_from_pipf_sections(doc, result)
+
+      # Дополнительно пробуем найти данные в скриптах (если HTML совсем пустой)
+      extract_from_scripts(doc, result) if result.blank?
+
+      modal = doc # используем весь документ как область поиска для legacy методов
     else
       Rails.logger.debug "PlDetailsFetcher.extract_modal_details: Found product details modal"
     end
@@ -1095,6 +1395,166 @@ class PlDetailsFetcher
     Rails.logger.info "PlDetailsFetcher.extract_modal_details: Extracted - description: #{result[:description].present?}, materials: #{result[:materials].present?}, designer: #{result[:designer].present?}, documents: #{result[:assembly_documents]&.length || 0}"
     result
   end
+
+  # --- PIPF section-based extraction (no click / no modal DOM) ---
+  #
+  # IKEA постепенно переводит страницы PIP на новую разметку (PIPF). В ней
+  # "модальные" листы (sheets) появляются только после клика, но данные часто
+  # уже присутствуют на странице в виде секций с заголовками.
+  #
+  # Этот метод пытается извлечь ключевые расширенные атрибуты, опираясь
+  # на заголовки секций (PL/RU) и типичную структуру списков/таблиц.
+  def extract_from_pipf_sections(doc, result)
+    # 1) Informacje o produkcie / Информация о продукте
+    info_section = find_section_by_heading(doc, [
+      'Informacje o produkcie',
+      'Информация о продукте'
+    ])
+    if info_section
+      paragraphs = extract_text_blocks(info_section, prefer: %w[p]).select { |t| t.length > 20 }
+      if paragraphs.any?
+        result[:short_description] ||= paragraphs.first
+        result[:description] ||= paragraphs.join("\n\n")
+      end
+    end
+
+    # 2) Materiały i pielęgnacja (materials + care)
+    mcare_section = find_section_by_heading(doc, [
+      'Materiały i pielęgnacja',
+      'Materiał i pielęgnacja',
+      'Материалы и уход'
+    ])
+    if mcare_section
+      materials_lines = extract_dt_dd_lines(mcare_section)
+      if materials_lines.any?
+        result[:materials] ||= materials_lines.join("\n")
+      end
+
+      care_lines = extract_list_lines(mcare_section).reject { |t| t.include?(':') }
+      # фильтр: инструкции по уходу часто короткие (1-2 предложения) и без двоеточий
+      care_lines = care_lines.select { |t| t.length.between?(3, 220) }
+      if care_lines.any?
+        result[:care_instructions] ||= care_lines.uniq.join("\n")
+      end
+    end
+
+    # 3) Bezpieczeństwo / Safety
+    safety_section = find_section_by_heading(doc, [
+      'Bezpieczeństwo',
+      'Bezpieczeństwo i zgodność',
+      'Informacje o bezpieczeństwie',
+      'Информация о безопасности',
+      'Безопасность'
+    ])
+    if safety_section
+      safety_lines = extract_list_lines(safety_section).select { |t| t.length > 10 }
+      result[:safety_info] ||= safety_lines.uniq.join("\n") if safety_lines.any?
+    end
+
+    # 4) Dobrze wiedzieć / Good to know
+    good_section = find_section_by_heading(doc, [
+      'Dobrze wiedzieć',
+      'Warto wiedzieć',
+      'Полезно знать'
+    ])
+    if good_section
+      good_lines = extract_list_lines(good_section).select { |t| t.length > 10 }
+      result[:good_to_know] ||= good_lines.uniq.join("\n") if good_lines.any?
+    end
+
+    # 5) Dokumenty (assembly / manuals) - вытащим ссылки
+    docs_section = find_section_by_heading(doc, [
+      'Instrukcja montażu',
+      'Instrukcje montażu',
+      'Instrukcje i dokumenty',
+      'Dokumenty',
+      'Документы',
+      'Инструкции'
+    ])
+    if docs_section
+      links = docs_section.css('a').map do |a|
+        href = a['href'].to_s.strip
+        next if href.blank?
+        href = "https://www.ikea.com#{href}" if href.start_with?('/')
+        next unless href.match?(/assembly_instructions|manuals|product-support|documents/i)
+        title = a.text.to_s.strip
+        { title: title.presence || 'Document', url: href }
+      end.compact
+
+      if links.any?
+        # Keep the same structure as extract_documents_from_modal: Array of {title, url}
+        result[:assembly_documents] ||= links.uniq { |x| x[:url] }
+      end
+    end
+  rescue => e
+    Rails.logger.warn "PlDetailsFetcher.extract_from_pipf_sections: Failed: #{e.class} - #{e.message}"
+  end
+
+  def find_section_by_heading(doc, headings)
+    normalized_targets = headings.compact.map { |h| normalize_text(h).downcase }
+    return nil if normalized_targets.empty?
+
+    candidates = doc.css('h1, h2, h3, [role="heading"]').to_a
+    heading_node = candidates.find do |n|
+      t = normalize_text(n.text)
+      next false if t.blank?
+      normalized_targets.include?(t.downcase)
+    end
+
+    return nil unless heading_node
+
+    # На новых PIPF страницах заголовок часто лежит глубоко внутри "accordion item".
+    # Поднимаемся до ближайшего контейнера, который вероятнее всего содержит контент.
+    container = heading_node.ancestors.find do |a|
+      cls = a['class'].to_s
+      id = a['id'].to_s
+      a.name == 'section' ||
+        cls.include?('pipf-accordion') ||
+        cls.include?('pipf-product-details') ||
+        cls.include?('pip-product-details') ||
+        id.include?('pip')
+    end
+
+    container || heading_node.parent
+  end
+
+  def extract_text_blocks(container, prefer: %w[p li dt dd])
+    nodes = []
+    prefer.each do |tag|
+      nodes.concat(container.css(tag))
+    end
+
+    texts = nodes.map { |n| normalize_text(n.text) }
+                 .reject(&:blank?)
+                 .reject { |t| t.length < 2 }
+
+    # remove duplicates preserving order
+    seen = {}
+    texts.select { |t| (seen[t] ||= false) == false && (seen[t] = true) }
+  end
+
+  def extract_list_lines(container)
+    extract_text_blocks(container, prefer: %w[li p]).reject do |t|
+      t.match?(/cookie|privacy|terms|regulamin|polityka/i)
+    end
+  end
+
+  def extract_dt_dd_lines(container)
+    lines = []
+    container.css('dt').each do |dt|
+      key = normalize_text(dt.text)
+      next if key.blank?
+      dd = find_next_dd(dt)
+      val = dd ? normalize_text(dd.text) : nil
+      next if val.blank?
+      lines << "#{key}: #{val}"
+    end
+    lines.uniq
+  end
+
+  def normalize_text(text)
+    text.to_s.gsub(/\u00A0/, ' ').gsub(/\s+/, ' ').strip
+  end
   
   # Вспомогательные методы для извлечения данных из модального окна
   
@@ -1111,11 +1571,11 @@ class PlDetailsFetcher
     
     if description_paragraphs.any?
       # Первый параграф - краткое описание, остальные - полное описание
-      result[:short_description] = description_paragraphs.first if description_paragraphs.first.present?
+      result[:short_description] ||= description_paragraphs.first if description_paragraphs.first.present?
       if description_paragraphs.length > 1
-        result[:description] = description_paragraphs.join("\n\n")
+        result[:description] ||= description_paragraphs.join("\n\n")
       elsif description_paragraphs.length == 1
-        result[:description] = description_paragraphs.first
+        result[:description] ||= description_paragraphs.first
       end
       Rails.logger.debug "PlDetailsFetcher.extract_description_from_modal: Extracted #{description_paragraphs.length} description paragraphs"
     end
@@ -1169,20 +1629,20 @@ class PlDetailsFetcher
   def extract_materials_and_care_from_modal(modal, doc, result)
     # Ищем секцию "Материалы и уход" по разным селекторам
     materials_section = find_section_by_id(modal, 'product-details-material-and-care') ||
-                        find_section_by_text(modal, ['материал', 'material', 'уход', 'care'])
+                        find_section_by_text(modal, ['материал', 'material', 'materia', 'materiały', 'uho', 'уход', 'care', 'pielęgnacja', 'pielegnacja'])
     
     if materials_section
       # Извлекаем материалы
       materials_data = extract_materials_list(materials_section)
       if materials_data.any?
-        result[:materials] = materials_data.join("\n")
+        result[:materials] ||= materials_data.join("\n")
         Rails.logger.debug "PlDetailsFetcher.extract_materials_and_care_from_modal: Extracted #{materials_data.length} material items"
       end
       
       # Извлекаем инструкции по уходу
       care_data = extract_care_instructions(materials_section)
       if care_data.any?
-        result[:care_instructions] = care_data.join("\n")
+        result[:care_instructions] ||= care_data.join("\n")
         Rails.logger.debug "PlDetailsFetcher.extract_materials_and_care_from_modal: Extracted care instructions"
       end
     end
@@ -1270,7 +1730,7 @@ class PlDetailsFetcher
     # Ищем заголовок "Уход"
     care_header = section.css('h3, .pipf-product-details-modal__care-header, [class*="care-header"]').find { |h|
       text = h.text.downcase
-      text.include?('уход') || text.include?('care')
+      text.include?('уход') || text.include?('care') || text.include?('pielęgn') || text.include?('pielegn')
     }
     
     return care_items unless care_header
@@ -1310,12 +1770,12 @@ class PlDetailsFetcher
   
   def extract_safety_info_from_modal(modal, result)
     safety_section = find_section_by_id(modal, 'product-details-safety-and-compliance') ||
-                     find_section_by_text(modal, ['безопасность', 'safety', 'соответствие', 'compliance'])
+                     find_section_by_text(modal, ['безопасность', 'safety', 'соответствие', 'compliance', 'bezpieczeń', 'bezpieczen', 'zgodność', 'zgodnosc'])
     
     if safety_section
       safety_paragraphs = safety_section.css('.pipf-product-details-modal__paragraph, p, span.pipf-product-details-modal__paragraph').map(&:text).map(&:strip).compact.reject(&:empty?)
       if safety_paragraphs.any?
-        result[:safety_info] = safety_paragraphs.join("\n\n")
+        result[:safety_info] ||= safety_paragraphs.join("\n\n")
         Rails.logger.debug "PlDetailsFetcher.extract_safety_info_from_modal: Extracted safety information"
       end
     end
@@ -1323,12 +1783,12 @@ class PlDetailsFetcher
   
   def extract_good_to_know_from_modal(modal, result)
     good_to_know_section = find_section_by_id(modal, 'product-details-good-to-know') ||
-                           find_section_by_text(modal, ['полезно знать', 'good to know', 'good-to-know'])
+                           find_section_by_text(modal, ['полезно знать', 'good to know', 'good-to-know', 'warto wied', 'warto wiedziec'])
     
     if good_to_know_section
       good_to_know_paragraphs = good_to_know_section.css('.pipf-product-details-modal__paragraph, p').map(&:text).map(&:strip).compact.reject(&:empty?)
       if good_to_know_paragraphs.any?
-        result[:good_to_know] = good_to_know_paragraphs.join("\n\n")
+        result[:good_to_know] ||= good_to_know_paragraphs.join("\n\n")
         Rails.logger.debug "PlDetailsFetcher.extract_good_to_know_from_modal: Extracted 'good to know' information"
       end
     end
@@ -2083,6 +2543,17 @@ class PlDetailsFetcher
     
     Rails.logger.info "PlDetailsFetcher.extract_images: Extracted #{images.length} total images (#{initial_count} existing + #{images.length - initial_count} new)"
     images
+  end
+
+  def browser_mode
+    @browser_mode ||= begin
+      mode = ENV.fetch('PL_FETCHER_BROWSER_MODE', 'new').to_s.strip.downcase
+      %w[new full].include?(mode) ? mode : 'new'
+    end
+  end
+
+  def full_browser_mode?
+    browser_mode == 'full'
   end
 end
 

@@ -4,7 +4,8 @@ namespace :deploy do
     task :restart do
       on roles(:app) do
         execute :sudo, 'systemctl', 'restart', 'ikea_back_puma'
-        info '✅ Puma перезапущен через systemd'
+        execute :sudo, 'systemctl', 'restart', 'ikea_back_sidekiq'
+        info '✅ Puma и Sidekiq перезапущены через systemd'
       end
     end
 
@@ -12,7 +13,8 @@ namespace :deploy do
     task :stop do
       on roles(:app) do
         execute :sudo, 'systemctl', 'stop', 'ikea_back_puma'
-        info '✅ Puma остановлен'
+        execute :sudo, 'systemctl', 'stop', 'ikea_back_sidekiq'
+        info '✅ Puma и Sidekiq остановлены'
       end
     end
 
@@ -20,7 +22,8 @@ namespace :deploy do
     task :start do
       on roles(:app) do
         execute :sudo, 'systemctl', 'start', 'ikea_back_puma'
-        info '✅ Puma запущен'
+        execute :sudo, 'systemctl', 'start', 'ikea_back_sidekiq'
+        info '✅ Puma и Sidekiq запущены'
       end
     end
 

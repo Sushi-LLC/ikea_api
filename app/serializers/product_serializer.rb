@@ -8,7 +8,8 @@ class ProductSerializer
              :delivery_type, :delivery_name, :delivery_cost,
              :delivery_reason, :breadcrumbs, :created_at, :updated_at,
              :seo_title, :seo_h1, :rating_avg, :rating_weighted,
-             :rating_count, :rating_updated_at
+             :rating_count, :rating_updated_at, :short_description_ru,
+             :content_ru
   
   attribute :variants do |product|
     product.variants || []

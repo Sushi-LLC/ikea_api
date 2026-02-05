@@ -403,6 +403,177 @@ paths:
                     items:
                       $ref: '#/components/schemas/PopularSearchQuery'
 
+  /api/v1/cart:
+    get:
+      summary: Получить содержимое корзины
+      description: |
+        Возвращает текущую корзину пользователя. 
+        Использует `X-Guest-Token` в заголовке или `guest_token` в query для идентификации гостевой корзины.
+        Если передан `promo_code` в query, он будет автоматически применен.
+      tags:
+        - Cart
+      parameters:
+        - name: guest_token
+          in: query
+          schema:
+            type: string
+        - name: promo_code
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Содержимое корзины
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+
+  /api/v1/cart/clear:
+    delete:
+      summary: Полная очистка корзины
+      tags:
+        - Cart
+      parameters:
+        - name: guest_token
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Пустая корзина
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+
+  /api/v1/cart_items:
+    post:
+      summary: Добавить товар в корзину
+      tags:
+        - Cart
+      parameters:
+        - name: guest_token
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - sku
+                - quantity
+              properties:
+                sku:
+                  type: string
+                quantity:
+                  type: integer
+                  minimum: 1
+      responses:
+        '200':
+          description: Обновленная корзина
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+
+  /api/v1/cart_items/{sku}:
+    parameters:
+      - name: sku
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: guest_token
+        in: query
+        schema:
+          type: string
+    patch:
+      summary: Обновить количество товара в корзине
+      tags:
+        - Cart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - quantity
+              properties:
+                quantity:
+                  type: integer
+      responses:
+        '200':
+          description: Обновленная корзина
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+    delete:
+      summary: Удалить товар из корзины
+      tags:
+        - Cart
+      responses:
+        '200':
+          description: Обновленная корзина
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+
+  /api/v1/cart/promo/apply:
+    post:
+      summary: Применить промокод к корзине
+      tags:
+        - Cart
+      parameters:
+        - name: guest_token
+          in: query
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+      responses:
+        '200':
+          description: Обновленная корзина с примененным промокодом
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+        '422':
+          description: Невалидный или неактивный промокод
+
+  /api/v1/cart/promo:
+    delete:
+      summary: Удалить промокод из корзины
+      tags:
+        - Cart
+      parameters:
+        - name: guest_token
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Обновленная корзина без промокода
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CartResponse'
+
   /api/v1/content/articles:
     get:
       summary: Список статей Tips & Ideas и News
@@ -670,6 +841,7 @@ paths:
         - BearerAuth: []
       description: |
         Доступны форматы CSV и JSON. JSON отдаёт массив объектов, CSV содержит перечисленные поля в шапке.
+        Требуются права администратора.
       responses:
         '200':
           description: Экспортированные отзывы
@@ -685,6 +857,24 @@ paths:
                   $ref: '#/components/schemas/ReviewExportEntry'
         '403':
           description: Недостаточно прав (только для админов)
+
+  /api/v1/categories/map:
+    get:
+      summary: Карта категорий
+      tags:
+        - Categories
+      responses:
+        '200':
+          description: Список всех категорий для карты сайта
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Category'
 
 components:
   schemas:
@@ -1129,6 +1319,127 @@ components:
           type: array
           items:
             type: string
+
+    CartResponse:
+      type: object
+      properties:
+        cart:
+          type: object
+          properties:
+            token:
+              type: string
+            expires_at:
+              type: string
+              format: date-time
+            items_count:
+              type: integer
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CartItem'
+            totals:
+              $ref: '#/components/schemas/CartTotals'
+            rules:
+              $ref: '#/components/schemas/CartRules'
+            flags:
+              $ref: '#/components/schemas/CartFlags'
+
+    CartItem:
+      type: object
+      properties:
+        sku:
+          type: string
+        quantity:
+          type: integer
+        available:
+          type: boolean
+        issue_reason:
+          type: string
+          nullable: true
+        product:
+          type: object
+          properties:
+            sku:
+              type: string
+            name:
+              type: string
+            price_byn:
+              type: string
+            quantity:
+              type: integer
+              nullable: true
+            category_id:
+              type: string
+            collection:
+              type: string
+            images:
+              type: object
+              properties:
+                local_images:
+                  type: array
+                  items:
+                    type: string
+                images:
+                  type: array
+                  items:
+                    type: string
+        pricing:
+          $ref: '#/components/schemas/CartItemPricing'
+        similar_products:
+          type: array
+          items:
+            type: object
+
+    CartItemPricing:
+      type: object
+      properties:
+        unit_price_old_byn:
+          type: string
+        unit_price_new_byn:
+          type: string
+        unit_discount_byn:
+          type: string
+        line_total_old_byn:
+          type: string
+        line_total_new_byn:
+          type: string
+        line_discount_byn:
+          type: string
+        promo_applied:
+          type: boolean
+        promo_code:
+          type: string
+          nullable: true
+
+    CartTotals:
+      type: object
+      properties:
+        subtotal_old_byn:
+          type: string
+        subtotal_new_byn:
+          type: string
+        discount_total_byn:
+          type: string
+
+    CartRules:
+      type: object
+      properties:
+        min_order_amount_byn:
+          type: string
+        free_delivery_threshold_byn:
+          type: string
+
+    CartFlags:
+      type: object
+      properties:
+        checkout_allowed:
+          type: boolean
+        min_order_missing_byn:
+          type: string
+        free_delivery_eligible:
+          type: boolean
+        free_delivery_missing_byn:
+          type: string
 
   securitySchemes:
     BearerAuth:

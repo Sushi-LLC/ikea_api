@@ -1,8 +1,4 @@
 Rails.application.routes.draw do
-  get '/up', to: 'health#check'
-  get '/feeds/google.xml', to: 'feeds#google'
-  get '/feeds/yandex.yml', to: 'feeds#yandex'
-  
   # Trestle Admin Panel автоматически монтируется на /admin
   # (см. config/initializers/trestle.rb, config.automount = true)
   
@@ -55,25 +51,32 @@ Rails.application.routes.draw do
       end
       
       # Filters
-      resources :filters, only: [:index]
+      # resources :filters, only: [:index]
       
       # Delivery
-      resources :delivery, only: [] do
-        collection do
-          get :types
-          post :calculate
-        end
-      end
+      # resources :delivery, only: [] do
+      #   collection do
+      #     get :types
+      #     post :calculate
+      #   end
+      # end
       
       # Auth
       post 'auth/login', to: 'auth#login'
       post 'auth/register', to: 'auth#register'
       
+      # Search
+      resources :search, only: [] do
+        collection do
+          get :suggest
+        end
+      end
+
       # Homepage
       get 'homepage/slider/main', to: 'homepage#slider_main'
       get 'homepage/slider/banners', to: 'homepage#slider_banners'
-      get 'search/suggest', to: 'search#suggest'
 
+      # Cart
       resource :cart, only: [:show] do
         delete :clear, on: :collection
       end
@@ -88,11 +91,18 @@ Rails.application.routes.draw do
         delete 'promo', to: 'cart_promo#remove'
       end
 
+      # Content
       namespace :content do
         resources :articles, only: [:index, :show], param: :slug
       end
+
+      # Reviews Export (API version)
+      get 'reviews/export(.:format)', to: 'reviews_exports#index'
     end
   end
 
-  get '/reviews/export(.:format)', to: 'reviews_exports#index'
+  # System & Feeds
+  get '/up', to: 'health#check'
+  get '/feeds/google.xml', to: 'feeds#google'
+  get '/feeds/yandex.yml', to: 'feeds#yandex'
 end

@@ -313,6 +313,141 @@ paths:
         '422':
           description: Ошибка валидации
 
+  /api/v1/auth/phone/send:
+    post:
+      summary: Отправить код подтверждения на телефон
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+              properties:
+                phone:
+                  type: string
+                  example: "79991234567"
+      responses:
+        '200':
+          description: Код успешно отправлен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '422':
+          description: Ошибка при отправке кода
+
+  /api/v1/auth/phone/verify:
+    post:
+      summary: Подтвердить код и войти/зарегистрироваться
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - phone
+                - code
+              properties:
+                phone:
+                  type: string
+                  example: "79991234567"
+                code:
+                  type: string
+                  example: "1234"
+                cart_token:
+                  type: string
+                  description: Опционально для объединения корзины
+      responses:
+        '200':
+          description: Успешный вход
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+                  is_new:
+                    type: boolean
+        '201':
+          description: Пользователь создан и выполнен вход
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/User'
+                  is_new:
+                    type: boolean
+        '401':
+          description: Неверный код
+
+  /api/v1/checkout:
+    post:
+      summary: Оформление заказа
+      tags:
+        - Checkout
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - full_name
+                - phone
+                - delivery_type
+                - payment_method
+              properties:
+                full_name:
+                  type: string
+                phone:
+                  type: string
+                delivery_type:
+                  type: string
+                payment_method:
+                  type: string
+                address:
+                  type: object
+                  properties:
+                    city:
+                      type: string
+                    street:
+                      type: string
+      responses:
+        '201':
+          description: Заказ успешно оформлен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  order_id:
+                    type: integer
+        '401':
+          description: Требуется авторизация
+        '422':
+          description: Ошибка при оформлении (например, не достигнута минимальная сумма)
+
   /api/v1/homepage/slider/main:
     get:
       summary: Баннеры основной секции главной страницы

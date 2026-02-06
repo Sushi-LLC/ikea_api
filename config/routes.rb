@@ -100,6 +100,9 @@ Rails.application.routes.draw do
 
       # Reviews Export (API version)
       get 'reviews/export(.:format)', to: 'reviews_exports#index'
+      
+      # Checkout
+      post 'checkout', to: 'checkout#create'
     end
   end
 

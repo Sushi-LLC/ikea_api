@@ -1,5 +1,6 @@
 class Order < ApplicationRecord
   belongs_to :user
+  belongs_to :promo_code, optional: true
   has_many :order_items, dependent: :destroy
 
   enum status: {

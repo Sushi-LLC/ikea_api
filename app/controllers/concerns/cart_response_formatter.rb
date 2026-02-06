@@ -99,7 +99,8 @@ module CartResponseFormatter
     {
       subtotal_old_byn: format_byn(totals[:subtotal_old_byn]),
       subtotal_new_byn: format_byn(totals[:subtotal_new_byn]),
-      discount_total_byn: format_byn(totals[:discount_total_byn])
+      discount_total_byn: format_byn(totals[:discount_total_byn]),
+      total_weight_kg: totals[:total_weight_kg]
     }
   end
 

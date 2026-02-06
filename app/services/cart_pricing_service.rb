@@ -30,17 +30,29 @@ class CartPricingService
     subtotal_old = items.sum { |entry| entry[:line_total_old_byn] }
     subtotal_new = items.sum { |entry| entry[:line_total_new_byn] }
     discount_total = subtotal_old - subtotal_new
+    total_weight = cart.cart_items.joins(:product).sum('products.weight * cart_items.quantity')
+    
+    # Logic from requirements using dynamic rules
+    rules = CartRulesService.call(subtotal_new_byn: subtotal_new)
 
     {
       items: items,
       totals: {
         subtotal_old_byn: subtotal_old,
         subtotal_new_byn: subtotal_new,
-        discount_total_byn: discount_total
+        discount_total_byn: discount_total,
+        total_weight_kg: total_weight.to_f
       },
       promo: {
         code: promo&.code,
         valid: promo_valid
+      },
+      meta: {
+        min_order_amount: rules[:rules][:min_order_amount_byn],
+        can_checkout: rules[:flags][:checkout_allowed],
+        min_order_error: rules[:flags][:checkout_allowed] ? nil : "Оформление доступно от #{rules[:rules][:min_order_amount_byn]} руб.",
+        free_delivery_threshold: rules[:rules][:free_delivery_threshold_byn],
+        free_delivery_remaining: rules[:flags][:free_delivery_missing_byn]
       }
     }
   end

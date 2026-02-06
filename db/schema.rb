@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_02_06_131804) do
+ActiveRecord::Schema[7.1].define(version: 2026_02_06_133220) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -335,7 +335,18 @@ ActiveRecord::Schema[7.1].define(version: 2026_02_06_131804) do
     t.datetime "purchased_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.decimal "total_amount", precision: 12, scale: 2
+    t.decimal "delivery_price", precision: 12, scale: 2
+    t.decimal "discount_amount", precision: 12, scale: 2
+    t.bigint "promo_code_id"
+    t.string "delivery_type"
+    t.string "payment_method"
+    t.string "full_name"
+    t.string "phone"
+    t.jsonb "address_json", default: {}
+    t.string "track_number"
     t.index ["crm_external_id"], name: "index_orders_on_crm_external_id"
+    t.index ["promo_code_id"], name: "index_orders_on_promo_code_id"
     t.index ["user_id"], name: "index_orders_on_user_id"
   end
 
@@ -580,6 +591,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_02_06_131804) do
   add_foreign_key "homepage_product_block_items", "products", primary_key: "sku"
   add_foreign_key "homepage_product_block_rules", "homepage_product_blocks"
   add_foreign_key "order_items", "orders"
+  add_foreign_key "orders", "promo_codes"
   add_foreign_key "orders", "users"
   add_foreign_key "product_filter_values", "filter_values"
   add_foreign_key "product_filter_values", "products"

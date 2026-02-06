@@ -16,6 +16,10 @@ class Cart < ApplicationRecord
     expires_at < Time.current
   end
 
+  def min_order_met?
+    cart_items.joins(:product).sum('products.price * cart_items.quantity') >= 150
+  end
+
   private
 
   def ensure_defaults

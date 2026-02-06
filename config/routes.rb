@@ -64,6 +64,8 @@ Rails.application.routes.draw do
       # Auth
       post 'auth/login', to: 'auth#login'
       post 'auth/register', to: 'auth#register'
+      post 'auth/phone/send', to: 'auth#send_phone_code'
+      post 'auth/phone/verify', to: 'auth#verify_phone_code'
       
       # Search
       resources :search, only: [] do

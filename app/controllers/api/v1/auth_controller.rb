@@ -43,6 +43,47 @@ module Api
         end
       end
       
+      def send_phone_code
+        result = PhoneAuthService.send_code(phone: params[:phone])
+        
+        if result[:success]
+          render json: { message: result[:message] }
+        else
+          render json: { error: result[:error] }, status: :unprocessable_entity
+        end
+      end
+      
+      def verify_phone_code
+        result = PhoneAuthService.verify_code(phone: params[:phone], code: params[:code])
+        
+        if result[:success]
+          user = result[:user]
+          
+          # Merge guest cart if present
+          guest_token = request.headers['X-Cart-Token'].presence || params[:cart_token].presence
+          if guest_token
+            CartMergeService.call(guest_token: guest_token, user: user)
+          end
+          
+          token = JwtService.encode({ user_id: user.id })
+          
+          status = result[:is_new] ? :created : :ok
+          
+          render json: {
+            token: token,
+            user: {
+              id: user.id,
+              username: user.username,
+              role: user.role,
+              phone: user.phone
+            },
+            is_new: result[:is_new]
+          }, status: status
+        else
+          render json: { error: result[:error] }, status: :unauthorized
+        end
+      end
+
       private
       
       def user_params

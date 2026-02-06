@@ -2,11 +2,13 @@ class User < ApplicationRecord
   include Trestle::Auth::ModelMethods
   include Trestle::Auth::ModelMethods::Rememberable
   
-  has_secure_password
+  has_secure_password(validations: false)
   
   validates :username, presence: true, uniqueness: true
   validates :email, uniqueness: true, allow_nil: true
+  validates :phone, uniqueness: true, allow_nil: true
   validates :role, inclusion: { in: %w[user admin manager] }
+  validates :password, presence: true, on: :create, unless: -> { phone.present? }
   
   scope :active, -> { where(is_active: true) }
 

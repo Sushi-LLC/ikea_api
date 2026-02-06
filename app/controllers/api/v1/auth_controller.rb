@@ -5,6 +5,12 @@ module Api
         user = User.find_by(username: params[:username])
         
         if user&.authenticate(params[:password]) && user.is_active?
+          # Merge guest cart if present
+          guest_token = request.headers['X-Cart-Token'].presence || params[:cart_token].presence
+          if guest_token
+            CartMergeService.call(guest_token: guest_token, user: user)
+          end
+
           token = JwtService.encode({ user_id: user.id })
           render json: {
             token: token,

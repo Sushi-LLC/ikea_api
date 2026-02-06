@@ -1,6 +1,7 @@
 class Cart < ApplicationRecord
   has_many :cart_items, dependent: :destroy
   belongs_to :promo_code, optional: true
+  belongs_to :user, optional: true
 
   validates :guest_token, presence: true, uniqueness: true
   validates :expires_at, presence: true

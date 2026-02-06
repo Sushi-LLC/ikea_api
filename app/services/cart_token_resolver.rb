@@ -1,5 +1,12 @@
 class CartTokenResolver
-  def self.call(request:, params:)
+  def self.call(request:, params:, user: nil)
+    # 1. Если есть пользователь, возвращаем его корзину
+    if user
+      cart = user.cart || user.create_cart!(expires_at: 1.year.from_now, guest_token: SecureRandom.hex(24))
+      return [cart, cart.guest_token, false] 
+    end
+
+    # 2. Иначе работаем как раньше с гостевыми токенами
     token = request.headers['X-Cart-Token'].presence || params[:cart_token].presence
     return new_cart_response if token.blank?
 

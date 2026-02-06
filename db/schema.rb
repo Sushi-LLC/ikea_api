@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_01_26_000006) do
+ActiveRecord::Schema[7.1].define(version: 2026_02_06_125544) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -78,8 +78,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_26_000006) do
     t.bigint "promo_code_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.bigint "user_id"
     t.index ["expires_at"], name: "index_carts_on_expires_at"
     t.index ["guest_token"], name: "index_carts_on_guest_token", unique: true
+    t.index ["user_id"], name: "index_carts_on_user_id"
   end
 
   create_table "categories", force: :cascade do |t|
@@ -558,6 +560,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_01_26_000006) do
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "cart_items", "carts"
   add_foreign_key "carts", "promo_codes"
+  add_foreign_key "carts", "users"
   add_foreign_key "category_products", "products"
   add_foreign_key "filter_values", "filters"
   add_foreign_key "home_banners", "categories", primary_key: "ikea_id", on_delete: :nullify

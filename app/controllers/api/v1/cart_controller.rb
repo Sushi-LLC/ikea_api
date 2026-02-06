@@ -4,14 +4,16 @@ module Api
       include CartResponseFormatter
 
       def show
-        cart, token, _ = CartTokenResolver.call(request: request, params: params)
+        authenticate_user_optional
+        cart, token, _ = CartTokenResolver.call(request: request, params: params, user: current_user)
         apply_promo_from_param(cart)
         cart.touch_expiration!
         render json: cart_response_payload(cart, token)
       end
 
       def clear
-        cart, token, _ = CartTokenResolver.call(request: request, params: params)
+        authenticate_user_optional
+        cart, token, _ = CartTokenResolver.call(request: request, params: params, user: current_user)
         cart.cart_items.destroy_all
         cart.touch_expiration!
         render json: cart_response_payload(cart, token)

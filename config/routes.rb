@@ -39,6 +39,7 @@ Rails.application.routes.draw do
             get :available
           end
         end
+        resources :orders, only: [:index, :show]
       end
       
       # Categories

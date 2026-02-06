@@ -862,6 +862,67 @@ paths:
                   meta:
                     $ref: '#/components/schemas/Meta'
 
+  /api/v1/account/orders:
+    get:
+      summary: Список заказов пользователя
+      tags:
+        - Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Список заказов с информацией об отслеживании
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+
+  /api/v1/account/orders/{id}:
+    get:
+      summary: Детали заказа
+      tags:
+        - Orders
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Детальная информация о заказе и его составе
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Order'
+                  included:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrderItem'
+
   /api/v1/products/{product_sku}/reviews:
     post:
       summary: Создать отзыв на купленный товар
@@ -1575,6 +1636,64 @@ components:
           type: boolean
         free_delivery_missing_byn:
           type: string
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        total_amount:
+          type: string
+        delivery_price:
+          type: string
+          nullable: true
+        delivery_type:
+          type: string
+        payment_method:
+          type: string
+          nullable: true
+        full_name:
+          type: string
+        phone:
+          type: string
+        track_number:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        address:
+          type: object
+        tracking_info:
+          type: object
+          properties:
+            status:
+              type: string
+            last_update:
+              type: string
+            provider:
+              type: string
+            tracking_url:
+              type: string
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+        product_sku:
+          type: string
+        quantity:
+          type: integer
+        price_byn:
+          type: string
+        name:
+          type: string
+        image_url:
+          type: string
+          nullable: true
 
   securitySchemes:
     BearerAuth:
